@@ -127,3 +127,10 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+/B4Counting.avi
+/.
+/disparity.py
+/B6Random.avi
+/B5Random.avi
+/test.py
+/output.avi
