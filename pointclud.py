@@ -45,9 +45,9 @@ counting5 = Batch(batchName='B5Counting', commDepth='SK_color_',
 counting5.getDepth('segmentedDepth\\stereo\\B5Counting')
 # counting5.getCsv('stereo\\joint_xyz\\B5Counting_SK')
 
-random5 = Batch(batchName='B5Counting', commDepth='SK_depth_',
+random5 = Batch(batchName='B5Random', commDepth='SK_depth_',
                 startImage='0', endImage='1499')
-random5.getDepth('segmentedDepth\\stereo\\B5Counting')
+random5.getDepth('segmentedDepth\\stereo\\B5Random')
 # random5.getCsv('stereo\\joint_xyz\\B5Counting_SK')
 
 counting5 = Batch(batchName='B6Counting', commDepth='SK_color_',
@@ -61,4 +61,4 @@ random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
 
-random6.pointCloudVisualization(70)
+random3.pointCloudVisualization(70)

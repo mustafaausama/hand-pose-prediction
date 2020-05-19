@@ -10,6 +10,9 @@ import cv2
 import numpy as np
 import open3d as o3d
 from tqdm import tqdm
+import sys
+
+np.set_printoptions(threshold=sys.maxsize)
 
 
 class Batch(object):
@@ -285,6 +288,7 @@ class Batch(object):
 
         # Import depth image of the given index.
         depth = cv2.imread(self.imagesDepth[instance])
+        depth = cv2.medianBlur(depth, 5)
 
         # Checks which of the color channels contain depth information
         # e.g. For NYU dataset it is blue and green.
@@ -329,52 +333,33 @@ class Batch(object):
         yMesh = np.delete(yMesh, depthToBeDeleted)
         totalDepth = np.delete(totalDepth, depthToBeDeleted)
 
-        # Converts the mesh data to a single (depth.shape[0] x depth.shape[1]) x 3
+        # Converts the mesh data to a single (image.shape[0] x image.shape[1]) x 3
         # matrix.
         xyz = np.zeros((np.size(xMesh), 3))
         xyz[:, 0] = np.reshape(xMesh, (1, np.size(yMesh)))
         xyz[:, 1] = np.reshape(yMesh, (1, np.size(xMesh)))
         xyz[:, 2] = np.reshape(totalDepth, (1, np.size(totalDepth)))
-        maxAll = max([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
-        minAll = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
 
-        # Normalize the coordinates between 0 and 1.
-        xyz[:, 0] = (xyz[:, 0] - minAll) / (maxAll - minAll)
-        xyz[:, 1] = (xyz[:, 1] - minAll) / (maxAll - minAll)
-        xyz[:, 2] = (xyz[:, 2] - minAll) / (maxAll - minAll)
-        maxAllNormalized = min([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
-        minAllNormalized = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
+        # pointCloud = o3d.geometry.PointCloud()
+        # pointCloud.points = o3d.utility.Vector3dVector(xyz)
+        # o3d.visualization.draw_geometries([pointCloud])
 
-        # cubeStart = 0
-        # cubeLen = 1
-        # points = [
-        #     [cubeStart, cubeStart, cubeStart],
-        #     [cubeLen, cubeStart, cubeStart],
-        #     [cubeStart, cubeLen, cubeStart],
-        #     [cubeLen, cubeLen, cubeStart],
-        #     [cubeStart, cubeStart, cubeLen],
-        #     [cubeLen, cubeStart, cubeLen],
-        #     [cubeStart, cubeLen, cubeLen],
-        #     [cubeLen, cubeLen, cubeLen],
-        # ]
+        # Normalizing between 0 and 1.
+        xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
+        xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
+        xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
 
-        cubeStartX = min(xyz[:, 0])
-        cubeStartY = min(xyz[:, 1])
-        cubeStartZ = min(xyz[:, 2])
-        cubeLenX = maxAllNormalized + cubeStartX
-        cubeLenY = maxAllNormalized + cubeStartY
-        cubeLenZ = maxAllNormalized + cubeStartZ
-
-        points = [
-            [cubeStartX, cubeStartY, cubeStartZ],
-            [cubeLenX, cubeStartY, cubeStartZ],
-            [cubeStartX, cubeLenY, cubeStartZ],
-            [cubeLenX, cubeLenY, cubeStartZ],
-            [cubeStartX, cubeStartY, cubeLenZ],
-            [cubeLenX, cubeStartY, cubeLenZ],
-            [cubeStartX, cubeLenY, cubeLenZ],
-            [cubeLenX, cubeLenY, cubeLenZ],
+        cubePoints = [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0],
+            [0, 0, 1],
+            [1, 0, 1],
+            [0, 1, 1],
+            [1, 1, 1],
         ]
+
         lines = [
             [0, 1],
             [0, 2],
@@ -389,17 +374,39 @@ class Batch(object):
             [2, 6],
             [3, 7],
         ]
-        colors = [[0, 0, 1] for i in range(len(lines))]
-        line_set = o3d.geometry.LineSet(
-            points=o3d.utility.Vector3dVector(points),
-            lines=o3d.utility.Vector2iVector(lines),
-        )
-        # line_set.colors = o3d.utility.Vector3dVector(colors)
+        # colors = [[0, 0, 1] for i in range(len(lines))]
+        cube = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(cubePoints),
+                                    lines=o3d.utility.Vector2iVector(lines))
 
         volumeResolutionValue = 32
-        voxelSize = max(max(xyz[:, 0]), max(xyz[:, 1]),
-                        max(xyz[:, 2])) / volumeResolutionValue
-        # print(max(xyz[:, 2]))
+        voxelSize = 1 / volumeResolutionValue
+        #
+        # voxels = []
+        # for x in range(volumeResolutionValue):
+        #     for y in range(volumeResolutionValue):
+        #         for z in range(volumeResolutionValue):
+        #             voxelStartX = cubeStartX + (x * voxelSize)
+        #             voxelStartY = cubeStartY + (y * voxelSize)
+        #             voxelStartZ = cubeStartZ + (z * voxelSize)
+        #
+        #             voxelPoints = [
+        #                 [voxelStartX, voxelStartY, voxelStartZ],
+        #                 [voxelStartX + voxelSize, voxelStartY, voxelStartZ],
+        #                 [voxelStartX, voxelStartY + voxelSize, voxelStartZ],
+        #                 [voxelStartX + voxelSize, voxelStartY + voxelSize, voxelStartZ],
+        #                 [voxelStartX, voxelStartY, voxelStartZ + voxelSize],
+        #                 [voxelStartX + voxelSize, voxelStartY, voxelStartZ + voxelSize],
+        #                 [voxelStartX, voxelStartY + voxelSize, voxelStartZ + voxelSize],
+        #                 [voxelStartX + voxelSize, voxelStartY + voxelSize, voxelStartZ + voxelSize],
+        #             ]
+        #             voxel = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(voxelPoints),
+        #                                          lines=o3d.utility.Vector2iVector(lines))
+        #             voxels.append(voxel)
+        #
+        # voxelGeometry = o3d.geometry.LineSet()
+        # for i in range(volumeResolutionValue ** 3):
+        #     voxelGeometry = voxelGeometry + voxels[i]
+
         voxelGrid = o3d.geometry.VoxelGrid()
 
         # Generates the actual Point Cloud.
@@ -407,17 +414,22 @@ class Batch(object):
         pointCloud = o3d.geometry.PointCloud()
         pointCloud.points = o3d.utility.Vector3dVector(xyz)
 
+        colors = [[0.8, 0, 0] for i in range(len(xyz[:, 1]))]
+        pointCloud.colors = o3d.utility.Vector3dVector(colors)
+
         axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
         center = axisAlignedBoundingBox.get_center()
-        print(center)
-        center = [[10, 10, 10]]
-        center = o3d.utility.Vector3dVector(center)
 
-        voxelGrid.create_from_point_cloud(pointCloud, voxelSize)
+        # voxelGrid = voxelGrid.create_from_point_cloud(pointCloud, voxelSize)
+
+        voxelGrid = voxelGrid.create_dense([0, 0, 0], voxelSize, 1., 1., 1.)
+        vox = voxelGrid.get_voxel(xyz[0])
+        print(voxelGrid.check_if_included(o3d.utility.Vector3dVector([[0, 0, 1]])))
+        print(vox)
 
         # o3d.io.write_point_cloud(f'{self._batchName}_{instance}.ply', pointCloud)
-        o3d.visualization.draw_geometries([pointCloud,
-                                           line_set])
+        o3d.visualization.draw_geometries([pointCloud, voxelGrid,
+                                           axisAlignedBoundingBox])
 
     def makeVideo(self, frameRate=60):
         """
