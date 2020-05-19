@@ -5,21 +5,22 @@ This is an example file.
 
 from tools.datamanager import Batch
 
-stereo = Batch(batchName='Stereo', commRgb='SK_color_',
-               commDepth='SK_depth_', startImage='150',
-               endImage='299')
-stereo.getRgb('stereo\\B6Random')
-stereo.getDepth('stereo\\B6Random')
-# stereo.getCsv('stereo\\joint_xyz\\B6Random_SK')
+# stereo = Batch(batchName='Stereo', commRgb='SK_color_',
+#                commDepth='SK_depth_', startImage='150',
+#                endImage='299')
+# stereo.getRgb('stereo\\B6Random')
+# stereo.getDepth('stereo\\B6Random')
+# # stereo.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
 
-# stereo = Batch(batchName='NYU', commRgb='rgb_1_',
-#                commDepth='depth_1_', startImage='0000001',
-#                endImage='0000100')
-# stereo.getRgb('nyu\\dataset_sample\\hand_data')
-# stereo.getDepth('nyu\\dataset_sample\\hand_data')
-# # stereo.getCsv('nyu\\joint_xyz\\1')
+stereo = Batch(batchName='NYU', commRgb='rgb_1_',
+               commDepth='depth_1_', startImage='0000001',
+               endImage='0000100')
+stereo.getRgb('nyu\\dataset_sample\\hand_data')
+stereo.getDepth('nyu\\dataset_sample\\hand_data')
+# stereo.getCsv('nyu\\joint_xyz\\1')
 
+# stereo.makeVideo()
 stereo.pointCloudVisualization(90)
 
 # stereo.roi()

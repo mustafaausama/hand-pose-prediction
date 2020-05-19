@@ -265,6 +265,8 @@ class Batch(object):
         Takes an index to data and shows the generated point cloud map of the
         data. This point cloud map is generated from depth images so this
         method will not work if depth images are not added to batch.
+        Note that this function does not returns as long as the visualization
+        window is opened.
         :param instance:    Data index that is going to be visualized.
                             Must be between 0 and self.batchSize-1.
 
@@ -333,17 +335,187 @@ class Batch(object):
         xyz[:, 0] = np.reshape(xMesh, (1, np.size(yMesh)))
         xyz[:, 1] = np.reshape(yMesh, (1, np.size(xMesh)))
         xyz[:, 2] = np.reshape(totalDepth, (1, np.size(totalDepth)))
+        maxAll = max([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
+        minAll = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
+
+        # Normalize the coordinates between 0 and 1.
+        xyz[:, 0] = (xyz[:, 0] - minAll) / (maxAll - minAll)
+        xyz[:, 1] = (xyz[:, 1] - minAll) / (maxAll - minAll)
+        xyz[:, 2] = (xyz[:, 2] - minAll) / (maxAll - minAll)
+        maxAllNormalized = min([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
+        minAllNormalized = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
+
+        # cubeStart = 0
+        # cubeLen = 1
+        # points = [
+        #     [cubeStart, cubeStart, cubeStart],
+        #     [cubeLen, cubeStart, cubeStart],
+        #     [cubeStart, cubeLen, cubeStart],
+        #     [cubeLen, cubeLen, cubeStart],
+        #     [cubeStart, cubeStart, cubeLen],
+        #     [cubeLen, cubeStart, cubeLen],
+        #     [cubeStart, cubeLen, cubeLen],
+        #     [cubeLen, cubeLen, cubeLen],
+        # ]
+
+        cubeStartX = min(xyz[:, 0])
+        cubeStartY = min(xyz[:, 1])
+        cubeStartZ = min(xyz[:, 2])
+        cubeLenX = maxAllNormalized + cubeStartX
+        cubeLenY = maxAllNormalized + cubeStartY
+        cubeLenZ = maxAllNormalized + cubeStartZ
+
+        points = [
+            [cubeStartX, cubeStartY, cubeStartZ],
+            [cubeLenX, cubeStartY, cubeStartZ],
+            [cubeStartX, cubeLenY, cubeStartZ],
+            [cubeLenX, cubeLenY, cubeStartZ],
+            [cubeStartX, cubeStartY, cubeLenZ],
+            [cubeLenX, cubeStartY, cubeLenZ],
+            [cubeStartX, cubeLenY, cubeLenZ],
+            [cubeLenX, cubeLenY, cubeLenZ],
+        ]
+        lines = [
+            [0, 1],
+            [0, 2],
+            [1, 3],
+            [2, 3],
+            [4, 5],
+            [4, 6],
+            [5, 7],
+            [6, 7],
+            [0, 4],
+            [1, 5],
+            [2, 6],
+            [3, 7],
+        ]
+        colors = [[0, 0, 1] for i in range(len(lines))]
+        line_set = o3d.geometry.LineSet(
+            points=o3d.utility.Vector3dVector(points),
+            lines=o3d.utility.Vector2iVector(lines),
+        )
+        # line_set.colors = o3d.utility.Vector3dVector(colors)
+
+        volumeResolutionValue = 32
+        voxelSize = max(max(xyz[:, 0]), max(xyz[:, 1]),
+                        max(xyz[:, 2])) / volumeResolutionValue
+        # print(max(xyz[:, 2]))
+        voxelGrid = o3d.geometry.VoxelGrid()
 
         # Generates the actual Point Cloud.
         # Uncomment the second last line to write the point cloud data.
-        pcl = o3d.geometry.PointCloud()
-        pcl.points = o3d.utility.Vector3dVector(xyz)
-        # o3d.io.write_point_cloud("sync.ply", pcl)
-        o3d.visualization.draw_geometries([pcl])
+        pointCloud = o3d.geometry.PointCloud()
+        pointCloud.points = o3d.utility.Vector3dVector(xyz)
+
+        axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
+        center = axisAlignedBoundingBox.get_center()
+        print(center)
+        center = [[10, 10, 10]]
+        center = o3d.utility.Vector3dVector(center)
+
+        voxelGrid.create_from_point_cloud(pointCloud, voxelSize)
+
+        # o3d.io.write_point_cloud(f'{self._batchName}_{instance}.ply', pointCloud)
+        o3d.visualization.draw_geometries([pointCloud,
+                                           line_set])
+
+    def makeVideo(self, frameRate=60):
+        """
+        Makes a video file with name of the batch. This is needed for visualization
+        of dataset and check the applied algorithm at a glance instead of checking
+        each image one by one. By default frame rate is 60fps but can be changed.
+
+        :return:
+        """
+        # Initializes the variable in which frames will be stored.
+        frames = []
+
+        for imageNumber in tqdm(range(self.batchSize),
+                                desc=f'Video {self._batchName}'):
+            frame = cv2.imread(self.imagesRgb[imageNumber])
+            frames.append(frame)
+
+        vidWriter = cv2.VideoWriter(f'{self._batchName}.avi',
+                                    cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
+                                    frameRate,
+                                    (frames[0].shape[1], frames[0].shape[0]))
+        for imageNumber in range(len(frames)):
+            vidWriter.write(frames[imageNumber])
+        # Releases the video so it can be changed outside of this program.
+        vidWriter.release()
 
     def roiSegment(self):
-        if not self._roi:
-            logging.error('Run roi() first.\n')
-            return
-        # TODO: Write a segmentation algorithm.
-        pass
+        """
+        The content of this function are very case specific and vary wildly from
+        image to image. There is not one unified algorithm to segment hands from
+        all data sets.
+        The following algorithm was used to segment depth images on the basis of
+        color images. It is recommended that this function is run on a notebook
+        because sliders are added to perfectly tune the hsv values color.
+
+        :return:
+        """
+
+        # Tune the roi for color images.
+        x_color = 210
+        y_color = 40
+        scale_color = 340
+        roiStart_color = (y_color, x_color)
+        roiEnd_color = (y_color + scale_color, x_color + scale_color)
+
+        # Tune the roi for depth images.
+        # The reason these are separate because depth images do not
+        # map perfectly on color images and need to be aligned.
+        x_depth = 231
+        y_depth = 90
+        scale_depth = 256
+        roiStart_depth = (y_depth, x_depth)
+        roiEnd_depth = (y_depth + scale_depth, x_depth + scale_depth)
+
+        # Create a directory of name 'seg'.
+        Path(self._exportDir + 'seg').mkdir(parents=True,
+                                            exist_ok=True)
+        for imageNumber in tqdm(range(1500), desc=f'Seg {self._batchName}'):
+            # imageNumber = 907 #@param {type:"slider", min:0, max:1499, step:1}
+            color = cv2.imread(self.imagesRgb)
+            depth = cv2.imread(self.imagesDepth)
+
+            color = color[roiStart_color[0]:roiEnd_color[0],
+                    roiStart_color[1]:roiEnd_color[1]]
+
+            hl = 0  # @param {type:"slider", min:0, max:255, step:1}
+            hh = 225  # @param {type:"slider", min:0, max:255, step:1}
+            sl = 42  # @param {type:"slider", min:0, max:255, step:1}
+            sh = 255  # @param {type:"slider", min:0, max:255, step:1}
+            vl = 0  # @param {type:"slider", min:0, max:255, step:1}
+            vh = 255  # @param {type:"slider", min:0, max:255, step:1}
+            color = cv2.resize(color, (256, 256))
+            hsv = cv2.cvtColor(color, cv2.COLOR_BGR2HSV)
+
+            mask = cv2.inRange(hsv, (hl, sl, vl), (hh, sh, vh))
+
+            mask = cv2.medianBlur(mask, 7)
+            kernel = np.ones((3, 3), np.uint8)
+            mask = cv2.erode(mask, kernel, iterations=1)
+
+            color = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+
+            depth = depth[roiStart_depth[0]:roiEnd_depth[0],
+                    roiStart_depth[1]:roiEnd_depth[1]]
+
+            # Overlays the color images on top of depth images for visualization
+            # combined = np.zeros((256, 256, 3), dtype=np.uint8)
+            # combined[:, :, 0] = color[:, :, 0]
+            # combined[:, :, 2] = 2*depth[:, :, 2]
+
+            color = cv2.bitwise_and(color, color, mask=mask)
+
+            depth = cv2.bitwise_and(depth, depth, mask=mask)
+            depth = cv2.medianBlur(depth, 5)
+
+            # Makes sure to add leading zeros to filename.
+            leading_zeros = '%0' + str(len(self._startImage)) + 'd'
+            imageIndex = leading_zeros % (imageNumber + int(self._startImage))
+
+            cv2.imwrite(self._exportDir + 'roi\\'
+                        + self._commDepth + f'{imageIndex}.png', depth)
