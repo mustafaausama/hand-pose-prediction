@@ -15,6 +15,73 @@ import sys
 np.set_printoptions(threshold=sys.maxsize)
 
 
+def getActualDepth(depthImage):
+    """
+    Depth of an image is typically larger than 8 bits, so it cannot be
+    stored in an 8 bit image. For this reason most data sets have their
+    depth stored in different color channels of the image.
+    :param depthImage:  The depth image from which data is being extracted.
+    :return:            The total depth value.
+    """
+    if max(depthImage[:, 0, 0]) == 0 and max(depthImage[:, 0, 1]) < 127:
+        return depthImage[:, :, 1] * 256 + depthImage[:, :, 2]
+    elif max(depthImage[:, 0, 0]) == 0 and max(depthImage[:, 0, 2]) < 127:
+        return depthImage[:, :, 2] * 256 + depthImage[:, :, 1]
+    elif max(depthImage[:, 0, 1]) == 0 and max(depthImage[:, 0, 0]) < 127:
+        return depthImage[:, :, 0] * 256 + depthImage[:, :, 2]
+    elif max(depthImage[:, 0, 1]) == 0 and max(depthImage[:, 0, 2]) < 127:
+        return depthImage[:, :, 2] * 256 + depthImage[:, :, 0]
+    elif max(depthImage[:, 0, 2]) == 0 and max(depthImage[:, 0, 0]) < 127:
+        return depthImage[:, :, 0] * 256 + depthImage[:, :, 1]
+    elif max(depthImage[:, 0, 2]) == 0 and max(depthImage[:, 0, 1]) < 127:
+        return depthImage[:, :, 1] * 256 + depthImage[:, :, 0]
+    else:
+        logging.error('Depth value is not 10 bits.\n'
+                      'Not Supported.\n')
+        quit()
+
+
+def getCoordinatesFromDepth(actualDepth):
+    """
+    To generate xyz matrix from depth data to be displayed in point cloud map.
+    :param actualDepth: The total depth found after calculating from all channels.
+    :return:            A matrix of dimensions (image.shape[0] x image.shape[1]) x 3
+                        which can be directly plugged into the point cloud method.
+    """
+
+    # Create a template for X and Y points based on depth
+    # parameters.
+    xPoints = np.linspace(0, actualDepth.shape[1] - 1,
+                          actualDepth.shape[1], dtype=int)
+    yPoints = np.linspace(0, actualDepth.shape[0] - 1,
+                          actualDepth.shape[0], dtype=int)
+
+    # X and Y values are converted into mesh
+    xMesh, yMesh = np.meshgrid(xPoints, yPoints)
+    xMesh = np.reshape(xMesh, (1, np.size(xMesh)))
+    yMesh = np.reshape(yMesh, (1, np.size(yMesh)))
+    actualDepth = np.reshape(actualDepth, -1)
+
+    # Finds the static background depth.
+    depthToBeDeleted = []
+    for i in range(len(actualDepth)):
+        if actualDepth[i] == actualDepth[0]:
+            depthToBeDeleted.append(i)
+
+    # Deletes the static depth value.
+    xMesh = np.delete(xMesh, depthToBeDeleted)
+    yMesh = np.delete(yMesh, depthToBeDeleted)
+    actualDepth = np.delete(actualDepth, depthToBeDeleted)
+
+    # Converts the mesh data to a single (image.shape[0] x image.shape[1]) x 3
+    # matrix.
+    xyz = np.zeros((np.size(xMesh), 3))
+    xyz[:, 0] = np.reshape(xMesh, (1, np.size(yMesh)))
+    xyz[:, 1] = np.reshape(yMesh, (1, np.size(xMesh)))
+    xyz[:, 2] = np.reshape(actualDepth, (1, np.size(actualDepth)))
+    return xyz
+
+
 class Batch(object):
     def __init__(self, batchName, commRgb=None, commDepth=None,
                  startImage=None, endImage=None):
@@ -263,6 +330,22 @@ class Batch(object):
                 cv2.imwrite(self._exportDir + 'roi\\depth\\'
                             + self._commDepth + f'{imageIndex}.png', roi_depth)
 
+    def _checkDepth(self, instance=0):
+        """
+        Checks whether or not the depth images have been imported from the
+        dataset.
+        :param instance: The index of interest.
+        :return:
+        """
+        if not self._depth:
+            logging.error('No depth images added.\n')
+            quit()
+
+        # Checks if image index is out of bounds.
+        if instance > self.batchSize - 1:
+            logging.error(f'Enter the image between 0 and {self.batchSize - 1}.\n')
+            quit()
+
     def pointCloudVisualization(self, instance):
         """
         Takes an index to data and shows the generated point cloud map of the
@@ -277,88 +360,108 @@ class Batch(object):
         """
 
         # Checks if depth images are present in batch.
-        if not self._depth:
-            logging.error('No depth images added.\n')
-            return
+        self._checkDepth(instance)
 
-        # Checks if image index is out of bounds.
-        if instance > self.batchSize - 1:
-            logging.error(f'Enter the image between 0 and {self.batchSize - 1}.\n')
-            return
+        # Import depth image of the given index.
+        depth = cv2.imread(self.imagesDepth[instance])
+        # depth = cv2.medianBlur(depth, 5)
+
+        # Merging the two channel depth data into one variable.
+        actualDepth = getActualDepth(depth)
+        xyz = getCoordinatesFromDepth(actualDepth)
+
+        # Generates the actual Point Cloud.
+        pointCloud = o3d.geometry.PointCloud()
+        pointCloud.points = o3d.utility.Vector3dVector(xyz)
+
+        # Generates the Axis Aligned Bounding Box
+        axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
+
+        o3d.visualization.draw_geometries([pointCloud,
+                                           axisAlignedBoundingBox])
+
+    def pointCloudAnimation(self):
+        """
+        Opens a window containing point cloud visualization which updates and creates an
+        animation.
+        :return:
+        """
+        # Custom visualization object.
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+
+        # Initialization.
+        depth = cv2.imread(self.imagesDepth[0])
+        actualDepth = getActualDepth(depth)
+        xyz = getCoordinatesFromDepth(actualDepth)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(xyz)
+        vis.add_geometry(pcd)
+
+        # Running.
+        for instance in range(self.batchSize):
+            depth = cv2.imread(self.imagesDepth[instance])
+            actualDepth = getActualDepth(depth)
+            xyz = getCoordinatesFromDepth(actualDepth)
+            pcd.points = o3d.utility.Vector3dVector(xyz)
+            vis.update_geometry(pcd)
+            vis.poll_events()
+            vis.update_renderer()
+
+        # Termination.
+        vis.destroy_window()
+
+    def generatePointCloud(self, instance):
 
         # Import depth image of the given index.
         depth = cv2.imread(self.imagesDepth[instance])
         depth = cv2.medianBlur(depth, 5)
 
-        # Checks which of the color channels contain depth information
-        # e.g. For NYU dataset it is blue and green.
-        if max(depth[:, 0, 0]) == 0:
-            hChannel = depth[:, :, 1]
-            lChannel = depth[:, :, 2]
-        elif max(depth[:, 0, 1]) == 0:
-            hChannel = depth[:, :, 0]
-            lChannel = depth[:, :, 2]
-        elif max(depth[:, 0, 2]) == 0:
-            hChannel = depth[:, :, 0]
-            lChannel = depth[:, :, 1]
-        else:
-            logging.error('Depth value is not 10 bits.\n'
-                          'Not Supported.\n')
-            return
+        totalDepth = getActualDepth(depth)
 
-        # Creates the vectors of x and y points.
-        xPoints = np.linspace(0, depth.shape[1] - 1,
-                              depth.shape[1], dtype=int)
-        yPoints = np.linspace(0, depth.shape[0] - 1,
-                              depth.shape[0], dtype=int)
-        xMesh, yMesh = np.meshgrid(xPoints, yPoints)
-        xMesh = np.reshape(xMesh, (1, np.size(xMesh)))
-        yMesh = np.reshape(yMesh, (1, np.size(yMesh)))
-
-        # Merging the two channel depth data into one variable.
-        hChannel = np.reshape(hChannel, (depth.shape[1], depth.shape[0]))
-        lChannel = np.reshape(lChannel, (depth.shape[1], depth.shape[0]))
-        lChannel = lChannel + 256
-        totalDepth = hChannel + lChannel
-        totalDepth = np.reshape(totalDepth, -1)
-
-        # Checks where in image is static depth present.
-        depthToBeDeleted = []
-        for i in range(len(totalDepth)):
-            if totalDepth[i] == totalDepth[0]:
-                depthToBeDeleted.append(i)
-
-        # Deletes the static depth value.
-        xMesh = np.delete(xMesh, depthToBeDeleted)
-        yMesh = np.delete(yMesh, depthToBeDeleted)
-        totalDepth = np.delete(totalDepth, depthToBeDeleted)
-
-        # Converts the mesh data to a single (image.shape[0] x image.shape[1]) x 3
-        # matrix.
-        xyz = np.zeros((np.size(xMesh), 3))
-        xyz[:, 0] = np.reshape(xMesh, (1, np.size(yMesh)))
-        xyz[:, 1] = np.reshape(yMesh, (1, np.size(xMesh)))
-        xyz[:, 2] = np.reshape(totalDepth, (1, np.size(totalDepth)))
-
-        # pointCloud = o3d.geometry.PointCloud()
-        # pointCloud.points = o3d.utility.Vector3dVector(xyz)
-        # o3d.visualization.draw_geometries([pointCloud])
+        xyz = getCoordinatesFromDepth(totalDepth)
 
         # Normalizing between 0 and 1.
         xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
         xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
         xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
+        maxAllNormalized = min([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
+        minAllNormalized = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
+
+        # xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0]))
+        # xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1]))
+        # xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2]))
+        # maxAllNormalized = max([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
+        # minAllNormalized = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
+
+        cubeStartX = min(xyz[:, 0])
+        cubeStartY = min(xyz[:, 1])
+        cubeStartZ = min(xyz[:, 2])
+        cubeLenX = maxAllNormalized + cubeStartX
+        cubeLenY = maxAllNormalized + cubeStartY
+        cubeLenZ = maxAllNormalized + cubeStartZ
 
         cubePoints = [
-            [0, 0, 0],
-            [1, 0, 0],
-            [0, 1, 0],
-            [1, 1, 0],
-            [0, 0, 1],
-            [1, 0, 1],
-            [0, 1, 1],
-            [1, 1, 1],
+            [cubeStartX, cubeStartY, cubeStartZ],
+            [cubeLenX, cubeStartY, cubeStartZ],
+            [cubeStartX, cubeLenY, cubeStartZ],
+            [cubeLenX, cubeLenY, cubeStartZ],
+            [cubeStartX, cubeStartY, cubeLenZ],
+            [cubeLenX, cubeStartY, cubeLenZ],
+            [cubeStartX, cubeLenY, cubeLenZ],
+            [cubeLenX, cubeLenY, cubeLenZ],
         ]
+
+        # cubePoints = [
+        #     [0, 0, 0],
+        #     [1, 0, 0],
+        #     [0, 1, 0],
+        #     [1, 1, 0],
+        #     [0, 0, 1],
+        #     [1, 0, 1],
+        #     [0, 1, 1],
+        #     [1, 1, 1],
+        # ]
 
         lines = [
             [0, 1],
@@ -379,7 +482,7 @@ class Batch(object):
                                     lines=o3d.utility.Vector2iVector(lines))
 
         volumeResolutionValue = 32
-        voxelSize = 1 / volumeResolutionValue
+        voxelSize = max(max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])) / volumeResolutionValue
         #
         # voxels = []
         # for x in range(volumeResolutionValue):
@@ -414,21 +517,32 @@ class Batch(object):
         pointCloud = o3d.geometry.PointCloud()
         pointCloud.points = o3d.utility.Vector3dVector(xyz)
 
-        colors = [[0.8, 0, 0] for i in range(len(xyz[:, 1]))]
-        pointCloud.colors = o3d.utility.Vector3dVector(colors)
+        # colors = [[0.8, 0, 0] for i in range(len(xyz[:, 1]))]
+        # pointCloud.colors = o3d.utility.Vector3dVector(colors)
+
+        # norm = xyz[:, 2] / (max(xyz[:, 2]) - min(xyz[:, 2]))
+        # colors = []
+        # for i in norm:
+        #     if i == 0:
+        #         colors.append([0, 0, 1])
+        #     else:
+        #         colors.append([i, i/5, 1-i])
+
+        # pointCloud.colors = o3d.utility.Vector3dVector(colors)
 
         axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
         center = axisAlignedBoundingBox.get_center()
 
         # voxelGrid = voxelGrid.create_from_point_cloud(pointCloud, voxelSize)
 
-        voxelGrid = voxelGrid.create_dense([0, 0, 0], voxelSize, 1., 1., 1.)
-        vox = voxelGrid.get_voxel(xyz[0])
-        print(voxelGrid.check_if_included(o3d.utility.Vector3dVector([[0, 0, 1]])))
-        print(vox)
+        voxelGrid = voxelGrid.create_dense([0, 0, 0], voxelSize, maxAllNormalized, maxAllNormalized, maxAllNormalized)
+        # print(voxelGrid.check_if_included(o3d.utility.Vector3dVector([[0, 0, 1]])))
+
+        # for i in xyz:
+        #     print(voxelGrid.get_voxel(i))
 
         # o3d.io.write_point_cloud(f'{self._batchName}_{instance}.ply', pointCloud)
-        o3d.visualization.draw_geometries([pointCloud, voxelGrid,
+        o3d.visualization.draw_geometries([pointCloud, cube,
                                            axisAlignedBoundingBox])
 
     def makeVideo(self, frameRate=60):

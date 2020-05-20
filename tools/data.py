@@ -6,8 +6,8 @@ This is an example file.
 from tools.datamanager import Batch
 
 # stereo = Batch(batchName='Stereo', commRgb='SK_color_',
-#                commDepth='SK_depth_', startImage='150',
-#                endImage='299')
+#                commDepth='SK_depth_', startImage='0',
+#                endImage='1499')
 # stereo.getRgb('stereo\\B6Random')
 # stereo.getDepth('stereo\\B6Random')
 # # stereo.getCsv('stereo\\joint_xyz\\B6Random_SK')
@@ -21,6 +21,7 @@ stereo.getDepth('nyu\\dataset_sample\\hand_data')
 # stereo.getCsv('nyu\\joint_xyz\\1')
 
 # stereo.makeVideo()
-stereo.pointCloudVisualization(90)
+# stereo.pointCloudVisualization(99)
+stereo.pointCloudAnimation()
 
 # stereo.roi()
