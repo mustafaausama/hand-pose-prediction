@@ -60,4 +60,5 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
-random3.pointCloudVisualization(70)
+random3.voxelGrid(70)
+# random3.pointCloudAnimation()

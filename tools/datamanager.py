@@ -346,19 +346,13 @@ class Batch(object):
             logging.error(f'Enter the image between 0 and {self.batchSize - 1}.\n')
             quit()
 
-    def pointCloudVisualization(self, instance):
+    def _getPointCloud(self, instance, normalize=False):
         """
-        Takes an index to data and shows the generated point cloud map of the
-        data. This point cloud map is generated from depth images so this
-        method will not work if depth images are not added to batch.
-        Note that this function does not returns as long as the visualization
-        window is opened.
-        :param instance:    Data index that is going to be visualized.
-                            Must be between 0 and self.batchSize-1.
-
+        Returns the point cloud in open3d format to be displayed or saved.
+        Takes only one argument which is the index of depth image.
+        :param instance:    Data index that is going to be returned.
         :return:
         """
-
         # Checks if depth images are present in batch.
         self._checkDepth(instance)
 
@@ -370,11 +364,35 @@ class Batch(object):
         actualDepth = getActualDepth(depth)
         xyz = getCoordinatesFromDepth(actualDepth)
 
+        # Normalize the data between 0 and 1.
+        if normalize:
+            xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
+            xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
+            xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
+
         # Generates the actual Point Cloud.
         pointCloud = o3d.geometry.PointCloud()
         pointCloud.points = o3d.utility.Vector3dVector(xyz)
 
-        # Generates the Axis Aligned Bounding Box
+        return pointCloud
+
+    def pointCloudVisualization(self, instance, normalize=False):
+        """
+        Takes an index to data and shows the generated point cloud map of the
+        data. This point cloud map is generated from depth images so this
+        method will not work if depth images are not added to batch.
+        Note that this function does not returns as long as the visualization
+        window is opened.
+        :param instance:    Data index that is going to be visualized.
+                            Must be between 0 and self.batchSize-1.
+        :param normalize:   If true, will normalize the x, y and z between 0
+                            and 1.
+        :return:
+        """
+        # Generates the point cloud.
+        pointCloud = self._getPointCloud(instance, normalize)
+
+        # Generates the Axis Aligned Bounding Box.
         axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
 
         o3d.visualization.draw_geometries([pointCloud,
@@ -391,11 +409,7 @@ class Batch(object):
         vis.create_window()
 
         # Initialization.
-        depth = cv2.imread(self.imagesDepth[0])
-        actualDepth = getActualDepth(depth)
-        xyz = getCoordinatesFromDepth(actualDepth)
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(xyz)
+        pcd = self._getPointCloud(0)
         vis.add_geometry(pcd)
 
         # Running.
@@ -411,11 +425,78 @@ class Batch(object):
         # Termination.
         vis.destroy_window()
 
-    def generatePointCloud(self, instance):
+    def voxelGrid(self, instance):
+        # Checks if depth images are present in batch.
+        self._checkDepth(instance)
 
         # Import depth image of the given index.
         depth = cv2.imread(self.imagesDepth[instance])
-        depth = cv2.medianBlur(depth, 5)
+        # depth = cv2.medianBlur(depth, 5)
+
+        # Merging the two channel depth data into one variable.
+        actualDepth = getActualDepth(depth)
+        xyz = getCoordinatesFromDepth(actualDepth)
+
+        # Normalize the data between 0 and 1.
+        xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
+        xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
+        xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
+
+        # Generates the actual Point Cloud.
+        pointCloud = o3d.geometry.PointCloud()
+        pointCloud.points = o3d.utility.Vector3dVector(xyz)
+
+        colors = []
+        for i in xyz[:, 2]:
+            if i == 0:
+                colors.append([0, 0, 0])
+            else:
+                colors.append([i * 0.7, 0, 0])
+
+        pointCloud.colors = o3d.utility.Vector3dVector(colors)
+
+        axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
+
+        volumeResolutionValue = 32
+        voxelSize = 1 / volumeResolutionValue
+
+        voxelGrid = o3d.geometry.VoxelGrid()
+        # voxelGrid = voxelGrid.create_from_point_cloud_within_bounds(pointCloud, voxelSize, [0, 0, 0], [1, 1, 1])
+        voxelGrid = voxelGrid.create_dense([0, 0, 0], voxelSize, 1, 1, 1)
+
+        voxx, voxy, voxz = np.array([]), np.array([]), np.array([])
+        for i in range(len(xyz)):
+            voxx = np.append(voxx, voxelGrid.get_voxel(xyz[i])[0])
+            voxy = np.append(voxy, voxelGrid.get_voxel(xyz[i])[1])
+            voxz = np.append(voxz, voxelGrid.get_voxel(xyz[i])[2])
+
+        vox = np.zeros((len(voxx), 3))
+        vox[:, 0] = voxx
+        vox[:, 1] = voxy
+        vox[:, 2] = voxz
+
+        vox[:, 0] = (vox[:, 0] - min(vox[:, 0])) / (max(vox[:, 0]) - min(vox[:, 0]))
+        vox[:, 1] = (vox[:, 1] - min(vox[:, 1])) / (max(vox[:, 1]) - min(vox[:, 1]))
+        vox[:, 2] = (vox[:, 2] - min(vox[:, 2])) / (max(vox[:, 2]) - min(vox[:, 2]))
+
+        ppdd = o3d.geometry.PointCloud()
+        ppdd.points = o3d.utility.Vector3dVector(vox)
+
+        #
+        # v = o3d.geometry.Voxel()
+        #
+        # vv = voxelGrid.voxels
+        # print(vv)
+        #
+        # center = voxelGrid.get_center()
+        # # ppdd.points = o3d.utility.Vector3dVector([center])
+
+        o3d.visualization.draw_geometries([ppdd, axisAlignedBoundingBox])
+
+    def pointCloud(self, instance):
+
+        # Import depth image of the given index.
+        depth = cv2.imread(self.imagesDepth[instance])
 
         totalDepth = getActualDepth(depth)
 
