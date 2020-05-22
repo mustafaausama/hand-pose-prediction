@@ -4,6 +4,7 @@ This is an example file.
 """
 
 from tools.datamanager import Batch
+from tools.datamanager import occupancyGridVisualization
 
 # stereo = Batch(batchName='Stereo', commRgb='SK_color_',
 #                commDepth='SK_depth_', startImage='0',
@@ -22,6 +23,7 @@ stereo.getDepth('nyu\\dataset_sample\\hand_data')
 
 # stereo.makeVideo()
 # stereo.pointCloudVisualization(99)
-stereo.vocsal(99)
+og = stereo.getOccupancyGrid(99)
+occupancyGridVisualization(og)
 # stereo.pointCloudAnimation()
 # stereo.roi()

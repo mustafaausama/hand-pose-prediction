@@ -61,6 +61,8 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
-og = random3.getOccupancyGrid(900)
-occupancyGridVisualization(og)
+tsdf = random3.getTSDF(900, volumeResolutionValue=32)
+print(tsdf)
+
+# og = random3.getOccupancyGrid(900)
 # random4.pointCloudAnimation()

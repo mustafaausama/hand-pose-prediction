@@ -14,6 +14,7 @@ import sys
 from matplotlib import pyplot as plt
 from scipy.spatial import distance
 import seaborn as sns
+import itertools
 import pyvista as pv
 
 np.set_printoptions(threshold=sys.maxsize)
@@ -560,139 +561,70 @@ class Batch(object):
 
         return occupancyGrid
 
-
-    def pointCloud(self, instance):
-
-        # Import depth image of the given index.
+    def getTSDF(self, instance, volumeResolutionValue=32, normalize=False):
+        """
+        Returns the accurate TSDF of the given depth image. It can take a lot of time
+        to compute.
+        :param instance: Index of depth image.
+        :param volumeResolutionValue: MxMxM
+        :param normalize: False
+        :return: Accurate TSDF
+        """
+        # Import the depth image.
         depth = cv2.imread(self.imagesDepth[instance])
+        actualDepth = getActualDepth(depth)
+        xyz = getCoordinatesFromDepth(actualDepth, normalize)
 
-        totalDepth = getActualDepth(depth)
-
-        xyz = getCoordinatesFromDepth(totalDepth)
-
-        # Normalizing between 0 and 1.
-        xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
-        xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
-        xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
-        maxAllNormalized = min([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
-        minAllNormalized = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
-
-        # xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0]))
-        # xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1]))
-        # xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2]))
-        # maxAllNormalized = max([max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])])
-        # minAllNormalized = min([min(xyz[:, 0]), min(xyz[:, 1]), min(xyz[:, 2])])
-
-        cubeStartX = min(xyz[:, 0])
-        cubeStartY = min(xyz[:, 1])
-        cubeStartZ = min(xyz[:, 2])
-        cubeLenX = maxAllNormalized + cubeStartX
-        cubeLenY = maxAllNormalized + cubeStartY
-        cubeLenZ = maxAllNormalized + cubeStartZ
-
-        cubePoints = [
-            [cubeStartX, cubeStartY, cubeStartZ],
-            [cubeLenX, cubeStartY, cubeStartZ],
-            [cubeStartX, cubeLenY, cubeStartZ],
-            [cubeLenX, cubeLenY, cubeStartZ],
-            [cubeStartX, cubeStartY, cubeLenZ],
-            [cubeLenX, cubeStartY, cubeLenZ],
-            [cubeStartX, cubeLenY, cubeLenZ],
-            [cubeLenX, cubeLenY, cubeLenZ],
-        ]
-
-        # cubePoints = [
-        #     [0, 0, 0],
-        #     [1, 0, 0],
-        #     [0, 1, 0],
-        #     [1, 1, 0],
-        #     [0, 0, 1],
-        #     [1, 0, 1],
-        #     [0, 1, 1],
-        #     [1, 1, 1],
-        # ]
-
-        lines = [
-            [0, 1],
-            [0, 2],
-            [1, 3],
-            [2, 3],
-            [4, 5],
-            [4, 6],
-            [5, 7],
-            [6, 7],
-            [0, 4],
-            [1, 5],
-            [2, 6],
-            [3, 7],
-        ]
-        # colors = [[0, 0, 1] for i in range(len(lines))]
-        cube = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(cubePoints),
-                                    lines=o3d.utility.Vector2iVector(lines))
-
-        volumeResolutionValue = 32
-        voxelSize = max(max(xyz[:, 0]), max(xyz[:, 1]), max(xyz[:, 2])) / volumeResolutionValue
-        #
-        # voxels = []
-        # for x in range(volumeResolutionValue):
-        #     for y in range(volumeResolutionValue):
-        #         for z in range(volumeResolutionValue):
-        #             voxelStartX = cubeStartX + (x * voxelSize)
-        #             voxelStartY = cubeStartY + (y * voxelSize)
-        #             voxelStartZ = cubeStartZ + (z * voxelSize)
-        #
-        #             voxelPoints = [
-        #                 [voxelStartX, voxelStartY, voxelStartZ],
-        #                 [voxelStartX + voxelSize, voxelStartY, voxelStartZ],
-        #                 [voxelStartX, voxelStartY + voxelSize, voxelStartZ],
-        #                 [voxelStartX + voxelSize, voxelStartY + voxelSize, voxelStartZ],
-        #                 [voxelStartX, voxelStartY, voxelStartZ + voxelSize],
-        #                 [voxelStartX + voxelSize, voxelStartY, voxelStartZ + voxelSize],
-        #                 [voxelStartX, voxelStartY + voxelSize, voxelStartZ + voxelSize],
-        #                 [voxelStartX + voxelSize, voxelStartY + voxelSize, voxelStartZ + voxelSize],
-        #             ]
-        #             voxel = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(voxelPoints),
-        #                                          lines=o3d.utility.Vector2iVector(lines))
-        #             voxels.append(voxel)
-        #
-        # voxelGeometry = o3d.geometry.LineSet()
-        # for i in range(volumeResolutionValue ** 3):
-        #     voxelGeometry = voxelGeometry + voxels[i]
-
-        voxelGrid = o3d.geometry.VoxelGrid()
-
-        # Generates the actual Point Cloud.
-        # Uncomment the second last line to write the point cloud data.
+        # Point cloud creation.
         pointCloud = o3d.geometry.PointCloud()
         pointCloud.points = o3d.utility.Vector3dVector(xyz)
-
-        # colors = [[0.8, 0, 0] for i in range(len(xyz[:, 1]))]
-        # pointCloud.colors = o3d.utility.Vector3dVector(colors)
-
-        # norm = xyz[:, 2] / (max(xyz[:, 2]) - min(xyz[:, 2]))
-        # colors = []
-        # for i in norm:
-        #     if i == 0:
-        #         colors.append([0, 0, 1])
-        #     else:
-        #         colors.append([i, i/5, 1-i])
-
-        # pointCloud.colors = o3d.utility.Vector3dVector(colors)
-
         axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
-        center = axisAlignedBoundingBox.get_center()
 
-        # voxelGrid = voxelGrid.create_from_point_cloud(pointCloud, voxelSize)
+        # Define the voxel size.
+        voxelSize = axisAlignedBoundingBox.get_max_extent() / volumeResolutionValue
+        truncatedDistance = voxelSize * 3
 
-        voxelGrid = voxelGrid.create_dense([0, 0, 0], voxelSize, maxAllNormalized, maxAllNormalized, maxAllNormalized)
-        # print(voxelGrid.check_if_included(o3d.utility.Vector3dVector([[0, 0, 1]])))
+        # Define the voxel origin and side lengths.
+        origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
+        totalLength = axisAlignedBoundingBox.get_max_extent()
 
-        # for i in xyz:
-        #     print(voxelGrid.get_voxel(i))
+        # Calculate the center of each voxel.
+        voxelCenters = np.zeros((volumeResolutionValue, volumeResolutionValue, volumeResolutionValue, 3))
+        for ijk in itertools.product(range(volumeResolutionValue), range(volumeResolutionValue),
+                                     range(volumeResolutionValue)):
+            voxelCenters[ijk[0], ijk[1], ijk[2]] = (origin + np.array(ijk) * voxelSize) + voxelSize / 2
 
-        # o3d.io.write_point_cloud(f'{self._batchName}_{instance}.ply', pointCloud)
-        o3d.visualization.draw_geometries([pointCloud, cube,
-                                           axisAlignedBoundingBox])
+        # Create the voxel.
+        voxelGrid = o3d.geometry.VoxelGrid()
+        voxelGrid = voxelGrid.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
+
+        # Calculate accurate TSDF.
+        accurateTSDF = np.zeros((volumeResolutionValue, volumeResolutionValue, volumeResolutionValue))
+        for ijk in tqdm(itertools.product(range(volumeResolutionValue), range(volumeResolutionValue),
+                                          range(volumeResolutionValue))):
+
+            # Calculate distance between a voxel center and every point in point cloud
+            # to find the least distance point.
+
+            a = voxelCenters[ijk[0], ijk[1], ijk[2]][0] - xyz[:, 0]
+            b = voxelCenters[ijk[0], ijk[1], ijk[2]][1] - xyz[:, 1]
+            c = voxelCenters[ijk[0], ijk[1], ijk[2]][2] - xyz[:, 2]
+
+            unsignedDistance = np.sqrt(a ** 2 + b ** 2 + c ** 2)
+
+            i = np.where(unsignedDistance == min(unsignedDistance))
+            if voxelCenters[ijk[0], ijk[1], ijk[2]][2] > xyz[i[0][0], 2]:
+                signedDistance = -1 * min(unsignedDistance)
+            else:
+                signedDistance = min(unsignedDistance)
+            signedDistance = signedDistance / truncatedDistance
+
+            signedDistance = max(signedDistance, -1)
+            signedDistance = min(signedDistance, 1)
+
+            accurateTSDF[ijk[0], ijk[1], ijk[2]] = signedDistance
+
+        return accurateTSDF
 
     def makeVideo(self, frameRate=60):
         """
