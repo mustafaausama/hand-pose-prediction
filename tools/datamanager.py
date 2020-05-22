@@ -11,6 +11,10 @@ import numpy as np
 import open3d as o3d
 from tqdm import tqdm
 import sys
+from matplotlib import pyplot as plt
+from scipy.spatial import distance
+import seaborn as sns
+import pyvista as pv
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -41,10 +45,12 @@ def getActualDepth(depthImage):
         quit()
 
 
-def getCoordinatesFromDepth(actualDepth):
+def getCoordinatesFromDepth(actualDepth, frequencyThreshold=100, normalize=False):
     """
     To generate xyz matrix from depth data to be displayed in point cloud map.
+    :param normalize: Whether or not to normalize the data between 0 and 1.
     :param actualDepth: The total depth found after calculating from all channels.
+    :param frequencyThreshold: The minimum threshold to not delete the point.
     :return:            A matrix of dimensions (image.shape[0] x image.shape[1]) x 3
                         which can be directly plugged into the point cloud method.
     """
@@ -62,13 +68,26 @@ def getCoordinatesFromDepth(actualDepth):
     yMesh = np.reshape(yMesh, (1, np.size(yMesh)))
     actualDepth = np.reshape(actualDepth, -1)
 
-    # Finds the static background depth.
-    depthToBeDeleted = []
-    for i in range(len(actualDepth)):
-        if actualDepth[i] == actualDepth[0]:
-            depthToBeDeleted.append(i)
+    # Finds the static background depth and filters it out.
+    depthToBeDeleted = np.where(actualDepth == actualDepth[0])
 
     # Deletes the static depth value.
+    xMesh = np.delete(xMesh, depthToBeDeleted)
+    yMesh = np.delete(yMesh, depthToBeDeleted)
+    actualDepth = np.delete(actualDepth, depthToBeDeleted)
+
+    # Finds the outlier points that are far away from the main body of points.
+    depthHistogram, bins = np.histogram(actualDepth)
+    discardedFrequencyBin = np.array(np.where(depthHistogram <= frequencyThreshold))
+    startingPoint = bins[discardedFrequencyBin]
+    endingPoint = bins[discardedFrequencyBin + 1]
+
+    depthToBeDeleted = np.array([])
+    for i in range(np.size(startingPoint)):
+        depthToBeDeleted = np.append(depthToBeDeleted, np.where(
+            np.logical_and(actualDepth >= startingPoint[0][i], actualDepth <= endingPoint[0][i])))
+
+    # Deletes the outlier points.
     xMesh = np.delete(xMesh, depthToBeDeleted)
     yMesh = np.delete(yMesh, depthToBeDeleted)
     actualDepth = np.delete(actualDepth, depthToBeDeleted)
@@ -79,7 +98,80 @@ def getCoordinatesFromDepth(actualDepth):
     xyz[:, 0] = np.reshape(xMesh, (1, np.size(yMesh)))
     xyz[:, 1] = np.reshape(yMesh, (1, np.size(xMesh)))
     xyz[:, 2] = np.reshape(actualDepth, (1, np.size(actualDepth)))
+
+    # Zero is now the minimum value of our data.
+    xyz[:, 0] = xyz[:, 0] - min(xyz[:, 0])
+    xyz[:, 1] = xyz[:, 1] - min(xyz[:, 1])
+    xyz[:, 2] = xyz[:, 2] - min(xyz[:, 2])
+
+    # Normalize the data between 0 and 1.
+    if normalize:
+        xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
+        xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
+        xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
+
     return xyz
+
+
+def plotHistogram(xyz):
+    """
+    Plots the histogram of the given three dimensional matirx.
+    :param xyz:     A three dimensional matrix.
+    :return:
+    """
+
+    # Initialize the figure.
+    plt.figure(figsize=(10, 7), dpi=80)
+    kwargs = dict(hist_kws={'alpha': .6}, kde_kws={'linewidth': 2})
+
+    # Plot distribution of each axis separately.
+    sns.distplot(xyz[:, 0], color="dodgerblue", label='Histogram(x)', axlabel='bins', **kwargs)
+    sns.distplot(xyz[:, 1], color="orange", label='Histogram(y)', axlabel='bins', **kwargs)
+    sns.distplot(xyz[:, 2], color="deeppink", label='Histogram(z)', axlabel='bins', **kwargs)
+
+    # Output the plot.
+    plt.legend()
+    plt.show()
+
+
+def occupancyGridVisualization(occupancyGrid):
+    setVoxelsX, setVoxelsY, setVoxelsZ = np.where(occupancyGrid == 1.)
+    setVoxels = np.zeros((np.size(setVoxelsX), 3))
+    setVoxels[:, 0] = setVoxelsX
+    setVoxels[:, 1] = setVoxelsY
+    setVoxels[:, 2] = setVoxelsZ
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(setVoxels)
+
+    setVoxels[:, 2] = setVoxels[:, 2] / max(setVoxels[:, 2])
+    colors = []
+    for setVoxel in setVoxels[:, 2]:
+        if setVoxel == 0:
+            colors.append([0, 0, 0])
+        else:
+            colors.append([setVoxel * 0.7, 0, 0])
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    voxelSize = 1
+
+    voxelGrid = o3d.geometry.VoxelGrid()
+    voxelGrid = voxelGrid.create_from_point_cloud_within_bounds(pcd, voxelSize, [0, 0, 0],
+                                                                [len(occupancyGrid) - 1, len(occupancyGrid) - 1,
+                                                                 len(occupancyGrid) - 1])
+    axisAlignedBoundingBox = voxelGrid.get_axis_aligned_bounding_box()
+
+    # Define the volume origin and side lengths.
+    origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
+    totalLength = axisAlignedBoundingBox.get_max_extent()
+
+    # Create the volume.
+    volume = o3d.geometry.VoxelGrid()
+    volume = volume.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
+    axisAlignedBoundingBox = volume.get_axis_aligned_bounding_box()
+
+    # Draw the volume alongside voxel grid.
+    o3d.visualization.draw_geometries([axisAlignedBoundingBox, voxelGrid])
 
 
 class Batch(object):
@@ -362,13 +454,7 @@ class Batch(object):
 
         # Merging the two channel depth data into one variable.
         actualDepth = getActualDepth(depth)
-        xyz = getCoordinatesFromDepth(actualDepth)
-
-        # Normalize the data between 0 and 1.
-        if normalize:
-            xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
-            xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
-            xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
+        xyz = getCoordinatesFromDepth(actualDepth, normalize)
 
         # Generates the actual Point Cloud.
         pointCloud = o3d.geometry.PointCloud()
@@ -425,73 +511,55 @@ class Batch(object):
         # Termination.
         vis.destroy_window()
 
-    def voxelGrid(self, instance):
-        # Checks if depth images are present in batch.
-        self._checkDepth(instance)
-
-        # Import depth image of the given index.
+    def getOccupancyGrid(self, instance, volumeResolutionValue=32, normalize=False):
+        """
+        Returns a MxMxM matrix where M is the volume resolution value. By default it is 32.
+        But can be decreased or increased. This matrix is one in a voxel where a point lies
+        in the point cloud. Otherwise it is set as zero.
+        :param instance: The depth image index.
+        :param volumeResolutionValue: Size of created volume.
+        :param normalize: Whether or not grid will be normalized between 0 and 1.
+        :return: Occupancy Grid (MxMxM) matrix.
+        """
+        # Import the depth image and generate points from it.
         depth = cv2.imread(self.imagesDepth[instance])
-        # depth = cv2.medianBlur(depth, 5)
-
-        # Merging the two channel depth data into one variable.
         actualDepth = getActualDepth(depth)
-        xyz = getCoordinatesFromDepth(actualDepth)
+        xyz = getCoordinatesFromDepth(actualDepth, normalize)
 
-        # Normalize the data between 0 and 1.
-        xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
-        xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
-        xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
-
-        # Generates the actual Point Cloud.
+        # Create a point cloud and Axis Aligned Bounding Box.
         pointCloud = o3d.geometry.PointCloud()
         pointCloud.points = o3d.utility.Vector3dVector(xyz)
-
-        colors = []
-        for i in xyz[:, 2]:
-            if i == 0:
-                colors.append([0, 0, 0])
-            else:
-                colors.append([i * 0.7, 0, 0])
-
-        pointCloud.colors = o3d.utility.Vector3dVector(colors)
-
         axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
 
-        volumeResolutionValue = 32
-        voxelSize = 1 / volumeResolutionValue
+        # Define the voxel size.
+        voxelSize = axisAlignedBoundingBox.get_max_extent() / volumeResolutionValue
 
+        # Define the voxel origin and side lengths.
+        origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
+        totalLength = axisAlignedBoundingBox.get_max_extent()
+
+        # Create the voxel.
         voxelGrid = o3d.geometry.VoxelGrid()
-        # voxelGrid = voxelGrid.create_from_point_cloud_within_bounds(pointCloud, voxelSize, [0, 0, 0], [1, 1, 1])
-        voxelGrid = voxelGrid.create_dense([0, 0, 0], voxelSize, 1, 1, 1)
+        voxelGrid = voxelGrid.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
 
-        voxx, voxy, voxz = np.array([]), np.array([]), np.array([])
+        # Initialize matrix for occupancy grid.
+        occupancyGrid = np.zeros((volumeResolutionValue, volumeResolutionValue, volumeResolutionValue))
+
+        # Check all points to see which voxel they belong to and set the corresponding
+        # value in occupancy grid. Note that by default it is zero. So everything else
+        # besides the points will be zero.
+        voxelX, voxelY, voxelZ = np.array([]), np.array([]), np.array([])
         for i in range(len(xyz)):
-            voxx = np.append(voxx, voxelGrid.get_voxel(xyz[i])[0])
-            voxy = np.append(voxy, voxelGrid.get_voxel(xyz[i])[1])
-            voxz = np.append(voxz, voxelGrid.get_voxel(xyz[i])[2])
+            if max(voxelGrid.get_voxel(xyz[i])) >= volumeResolutionValue:
+                continue
+            occupancyGrid[
+                voxelGrid.get_voxel(xyz[i])[0], voxelGrid.get_voxel(xyz[i])[1], voxelGrid.get_voxel(xyz[i])[2]] = 1
+            voxelX = np.append(voxelX, voxelGrid.get_voxel(xyz[i])[0])
+            voxelY = np.append(voxelY, voxelGrid.get_voxel(xyz[i])[1])
+            voxelZ = np.append(voxelZ, voxelGrid.get_voxel(xyz[i])[2])
 
-        vox = np.zeros((len(voxx), 3))
-        vox[:, 0] = voxx
-        vox[:, 1] = voxy
-        vox[:, 2] = voxz
+        return occupancyGrid
 
-        vox[:, 0] = (vox[:, 0] - min(vox[:, 0])) / (max(vox[:, 0]) - min(vox[:, 0]))
-        vox[:, 1] = (vox[:, 1] - min(vox[:, 1])) / (max(vox[:, 1]) - min(vox[:, 1]))
-        vox[:, 2] = (vox[:, 2] - min(vox[:, 2])) / (max(vox[:, 2]) - min(vox[:, 2]))
-
-        ppdd = o3d.geometry.PointCloud()
-        ppdd.points = o3d.utility.Vector3dVector(vox)
-
-        #
-        # v = o3d.geometry.Voxel()
-        #
-        # vv = voxelGrid.voxels
-        # print(vv)
-        #
-        # center = voxelGrid.get_center()
-        # # ppdd.points = o3d.utility.Vector3dVector([center])
-
-        o3d.visualization.draw_geometries([ppdd, axisAlignedBoundingBox])
 
     def pointCloud(self, instance):
 

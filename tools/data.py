@@ -22,6 +22,6 @@ stereo.getDepth('nyu\\dataset_sample\\hand_data')
 
 # stereo.makeVideo()
 # stereo.pointCloudVisualization(99)
-stereo.pointCloudAnimation()
-
+stereo.vocsal(99)
+# stereo.pointCloudAnimation()
 # stereo.roi()

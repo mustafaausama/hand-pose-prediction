@@ -1,4 +1,5 @@
 from tools.datamanager import Batch
+from tools.datamanager import occupancyGridVisualization
 
 counting1 = Batch(batchName='B1Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
@@ -60,5 +61,6 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
-random3.voxelGrid(70)
-# random3.pointCloudAnimation()
+og = random3.getOccupancyGrid(900)
+occupancyGridVisualization(og)
+# random4.pointCloudAnimation()
