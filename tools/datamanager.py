@@ -12,10 +12,10 @@ import open3d as o3d
 from tqdm import tqdm
 import sys
 from matplotlib import pyplot as plt
-from scipy.spatial import distance
 import seaborn as sns
 import itertools
-import pyvista as pv
+import colorsys
+import h5py
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -116,7 +116,9 @@ def getCoordinatesFromDepth(actualDepth, frequencyThreshold=100, normalize=False
 
 def plotHistogram(xyz):
     """
-    Plots the histogram of the given three dimensional matirx.
+    Plots the histogram of the given three dimensional matirx. This is very
+    important to get right because it visualizes the distribution of our most
+    frequent values in our point cloud points.
     :param xyz:     A three dimensional matrix.
     :return:
     """
@@ -136,26 +138,38 @@ def plotHistogram(xyz):
 
 
 def occupancyGridVisualization(occupancyGrid):
+    """
+    Takes a MxMxM binary matrix which is zero every where and one
+    wherever there exists a point in voxel grid. This function visualizes
+    that matrix.
+    :param occupancyGrid: An MxMxM matrix
+    :return:
+    """
+    # Check where in the matrix lies ones.
     setVoxelsX, setVoxelsY, setVoxelsZ = np.where(occupancyGrid == 1.)
+
+    # Get coordinate points for those ones in this matrix.
     setVoxels = np.zeros((np.size(setVoxelsX), 3))
     setVoxels[:, 0] = setVoxelsX
     setVoxels[:, 1] = setVoxelsY
     setVoxels[:, 2] = setVoxelsZ
 
+    # Initialize point cloud.
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(setVoxels)
 
-    setVoxels[:, 2] = setVoxels[:, 2] / max(setVoxels[:, 2])
+    # Color the point cloud with respect to depth values.
+    setVoxels[:, 2] = (setVoxels[:, 2] - min(setVoxels[:, 2])) / (max(setVoxels[:, 2]) - min(setVoxels[:, 2]))
     colors = []
     for setVoxel in setVoxels[:, 2]:
-        if setVoxel == 0:
-            colors.append([0, 0, 0])
-        else:
-            colors.append([setVoxel * 0.7, 0, 0])
+        ii = colorsys.hsv_to_rgb(setVoxel, 0.65, 1)
+        colors.append([ii[0], ii[1], ii[2]])
     pcd.colors = o3d.utility.Vector3dVector(colors)
 
+    # This voxel size does not matter as it is just for visualization.
     voxelSize = 1
 
+    # Create the corresponding voxel grid and get the axis aligned bounding box.
     voxelGrid = o3d.geometry.VoxelGrid()
     voxelGrid = voxelGrid.create_from_point_cloud_within_bounds(pcd, voxelSize, [0, 0, 0],
                                                                 [len(occupancyGrid) - 1, len(occupancyGrid) - 1,
@@ -173,6 +187,62 @@ def occupancyGridVisualization(occupancyGrid):
 
     # Draw the volume alongside voxel grid.
     o3d.visualization.draw_geometries([axisAlignedBoundingBox, voxelGrid])
+
+
+def TSDFVisualization(tsdf):
+    """
+    Takes an accurate or one directional truncated signed distance field and blurts
+    out a window containing visualization of said field.
+    :param tsdf: An MxMxM matrix containing truncated signed distance field.
+    :return:
+    """
+    # Check where in the matrix lie ones and minus ones so we can ignore those.
+    signedDistanceVoxelX, signedDistanceVoxelY, signedDistanceVoxelZ = np.where(np.logical_and(tsdf != 1., tsdf != -1.))
+
+    # Get coordinate points for everywhere else.
+    setVoxels = np.zeros((np.size(signedDistanceVoxelX), 3))
+    setVoxels[:, 0] = signedDistanceVoxelX
+    setVoxels[:, 1] = signedDistanceVoxelY
+    setVoxels[:, 2] = signedDistanceVoxelZ
+
+    # Initialize the point cloud.
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(setVoxels)
+
+    # Read all the values that are not ones or minus ones.
+    nonOneValues = tsdf[signedDistanceVoxelX, signedDistanceVoxelY, signedDistanceVoxelZ]
+
+    # Normalize them between 0 and 1 because we will be generating colors on their basis.
+    nonOneValues = (nonOneValues - min(nonOneValues)) / (max(nonOneValues) - min(nonOneValues))
+    colors = []
+    for nonOneValue in nonOneValues:
+        ii = colorsys.hsv_to_rgb(nonOneValue, 0.65, 1)
+        colors.append([ii[0], ii[1], ii[2]])
+
+    # PCD is colored on the basis of signed distance and not on the basis of depth.
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    # A default voxel size of 1. Does not matter for visualization.
+    voxelSize = 1
+
+    # Create voxel grid appropriately.
+    voxelGrid = o3d.geometry.VoxelGrid()
+    voxelGrid = voxelGrid.create_from_point_cloud_within_bounds(pcd, voxelSize, [0, 0, 0],
+                                                                [len(tsdf) - 1, len(tsdf) - 1,
+                                                                 len(tsdf) - 1])
+    axisAlignedBoundingBox = voxelGrid.get_axis_aligned_bounding_box()
+
+    # Define the volume origin and side lengths.
+    origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
+    totalLength = axisAlignedBoundingBox.get_max_extent()
+
+    # Create the volume.
+    volume = o3d.geometry.VoxelGrid()
+    volume = volume.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
+    axisAlignedBoundingBox = volume.get_axis_aligned_bounding_box()
+
+    # Draw the volume alongside voxel grid.
+    o3d.visualization.draw_geometries([axisAlignedBoundingBox, pcd])
 
 
 class Batch(object):
@@ -455,7 +525,7 @@ class Batch(object):
 
         # Merging the two channel depth data into one variable.
         actualDepth = getActualDepth(depth)
-        xyz = getCoordinatesFromDepth(actualDepth, normalize)
+        xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Generates the actual Point Cloud.
         pointCloud = o3d.geometry.PointCloud()
@@ -463,7 +533,7 @@ class Batch(object):
 
         return pointCloud
 
-    def pointCloudVisualization(self, instance, normalize=False):
+    def pointCloudVisualization(self, instance, normalize=False, volumeResolutionValue=32):
         """
         Takes an index to data and shows the generated point cloud map of the
         data. This point cloud map is generated from depth images so this
@@ -481,6 +551,19 @@ class Batch(object):
 
         # Generates the Axis Aligned Bounding Box.
         axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
+
+        # Define the voxel size.
+        voxelSize = axisAlignedBoundingBox.get_max_extent() / volumeResolutionValue
+
+        # Define the voxel origin and side lengths.
+        origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
+        totalLength = axisAlignedBoundingBox.get_max_extent()
+
+        # Create the voxel.
+        voxelGrid = o3d.geometry.VoxelGrid()
+        voxelGrid = voxelGrid.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
+
+        axisAlignedBoundingBox = voxelGrid.get_axis_aligned_bounding_box()
 
         o3d.visualization.draw_geometries([pointCloud,
                                            axisAlignedBoundingBox])
@@ -525,7 +608,7 @@ class Batch(object):
         # Import the depth image and generate points from it.
         depth = cv2.imread(self.imagesDepth[instance])
         actualDepth = getActualDepth(depth)
-        xyz = getCoordinatesFromDepth(actualDepth, normalize)
+        xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Create a point cloud and Axis Aligned Bounding Box.
         pointCloud = o3d.geometry.PointCloud()
@@ -561,7 +644,7 @@ class Batch(object):
 
         return occupancyGrid
 
-    def getTSDF(self, instance, volumeResolutionValue=32, normalize=False):
+    def getAccurateTSDF(self, instance, volumeResolutionValue=32, normalize=False):
         """
         Returns the accurate TSDF of the given depth image. It can take a lot of time
         to compute.
@@ -573,7 +656,7 @@ class Batch(object):
         # Import the depth image.
         depth = cv2.imread(self.imagesDepth[instance])
         actualDepth = getActualDepth(depth)
-        xyz = getCoordinatesFromDepth(actualDepth, normalize)
+        xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Point cloud creation.
         pointCloud = o3d.geometry.PointCloud()
@@ -586,7 +669,6 @@ class Batch(object):
 
         # Define the voxel origin and side lengths.
         origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
-        totalLength = axisAlignedBoundingBox.get_max_extent()
 
         # Calculate the center of each voxel.
         voxelCenters = np.zeros((volumeResolutionValue, volumeResolutionValue, volumeResolutionValue, 3))
@@ -594,37 +676,44 @@ class Batch(object):
                                      range(volumeResolutionValue)):
             voxelCenters[ijk[0], ijk[1], ijk[2]] = (origin + np.array(ijk) * voxelSize) + voxelSize / 2
 
-        # Create the voxel.
-        voxelGrid = o3d.geometry.VoxelGrid()
-        voxelGrid = voxelGrid.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
-
         # Calculate accurate TSDF.
         accurateTSDF = np.zeros((volumeResolutionValue, volumeResolutionValue, volumeResolutionValue))
-        for ijk in tqdm(itertools.product(range(volumeResolutionValue), range(volumeResolutionValue),
-                                          range(volumeResolutionValue))):
+        for ijk in itertools.product(range(volumeResolutionValue), range(volumeResolutionValue),
+                                     range(volumeResolutionValue)):
 
             # Calculate distance between a voxel center and every point in point cloud
             # to find the least distance point.
-
             a = voxelCenters[ijk[0], ijk[1], ijk[2]][0] - xyz[:, 0]
             b = voxelCenters[ijk[0], ijk[1], ijk[2]][1] - xyz[:, 1]
             c = voxelCenters[ijk[0], ijk[1], ijk[2]][2] - xyz[:, 2]
 
-            unsignedDistance = np.sqrt(a ** 2 + b ** 2 + c ** 2)
+            unsignedDistance = np.sqrt(np.square(a) + np.square(b) + np.square(c))
 
-            i = np.where(unsignedDistance == min(unsignedDistance))
-            if voxelCenters[ijk[0], ijk[1], ijk[2]][2] > xyz[i[0][0], 2]:
-                signedDistance = -1 * min(unsignedDistance)
+            # Get the minimum distance.
+            minimum = np.where(unsignedDistance == unsignedDistance.min())
+
+            # Make the distance signed.
+            if voxelCenters[ijk[0], ijk[1], ijk[2]][2] > xyz[minimum[0][0], 2]:
+                signedDistance = -1 * unsignedDistance.min()
             else:
-                signedDistance = min(unsignedDistance)
-            signedDistance = signedDistance / truncatedDistance
+                signedDistance = unsignedDistance.min()
 
+            # Truncate the distance.
+            signedDistance = signedDistance / truncatedDistance
             signedDistance = max(signedDistance, -1)
             signedDistance = min(signedDistance, 1)
 
+            # Save the value of distance.
             accurateTSDF[ijk[0], ijk[1], ijk[2]] = signedDistance
 
         return accurateTSDF
+
+    def makeAccurateTSDF(self, volumeResolutionValue=32, normalize=False):
+        for instance in tqdm(range(self.batchSize), desc=f'{self._batchName}'):
+            tsdf = self.getAccurateTSDF(instance, volumeResolutionValue=volumeResolutionValue, normalize=normalize)
+            f = h5py.File(f'B3Random\\{instance}.h5', 'w')
+            f.create_dataset('TSDF', (32, 32, 32), data=tsdf)
+            f.close()
 
     def makeVideo(self, frameRate=60):
         """
@@ -687,8 +776,7 @@ class Batch(object):
             color = cv2.imread(self.imagesRgb)
             depth = cv2.imread(self.imagesDepth)
 
-            color = color[roiStart_color[0]:roiEnd_color[0],
-                    roiStart_color[1]:roiEnd_color[1]]
+            color = color[roiStart_color[0]:roiEnd_color[0], roiStart_color[1]:roiEnd_color[1]]
 
             hl = 0  # @param {type:"slider", min:0, max:255, step:1}
             hh = 225  # @param {type:"slider", min:0, max:255, step:1}
@@ -707,15 +795,14 @@ class Batch(object):
 
             color = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
-            depth = depth[roiStart_depth[0]:roiEnd_depth[0],
-                    roiStart_depth[1]:roiEnd_depth[1]]
+            depth = depth[roiStart_depth[0]:roiEnd_depth[0], roiStart_depth[1]:roiEnd_depth[1]]
 
             # Overlays the color images on top of depth images for visualization
             # combined = np.zeros((256, 256, 3), dtype=np.uint8)
             # combined[:, :, 0] = color[:, :, 0]
             # combined[:, :, 2] = 2*depth[:, :, 2]
 
-            color = cv2.bitwise_and(color, color, mask=mask)
+            # color = cv2.bitwise_and(color, color, mask=mask)
 
             depth = cv2.bitwise_and(depth, depth, mask=mask)
             depth = cv2.medianBlur(depth, 5)

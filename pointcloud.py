@@ -1,5 +1,8 @@
 from tools.datamanager import Batch
 from tools.datamanager import occupancyGridVisualization
+from tools.datamanager import TSDFVisualization
+import h5py
+import numpy as np
 
 counting1 = Batch(batchName='B1Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
@@ -61,8 +64,16 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
-tsdf = random3.getTSDF(900, volumeResolutionValue=32)
-print(tsdf)
+tsdf = random3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 
-# og = random3.getOccupancyGrid(900)
-# random4.pointCloudAnimation()
+# r = h5py.File('foo.h5', 'r')
+# data = np.array(r['TSDF'])
+# r.close()
+# TSDFVisualization(data)
+# random3.pointCloudVisualization(900)
+# og = random3.getOccupancyGrid(900, volumeResolutionValue=32, normalize=False)
+#
+#
+
+
+# random3.pointCloudAnimation()
