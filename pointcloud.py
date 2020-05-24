@@ -54,7 +54,7 @@ random5 = Batch(batchName='B5Random', commDepth='SK_depth_',
 random5.getDepth('segmentedDepth\\stereo\\B5Random')
 # random5.getCsv('stereo\\joint_xyz\\B5Counting_SK')
 
-counting5 = Batch(batchName='B6Counting', commDepth='SK_color_',
+counting6 = Batch(batchName='B6Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
 counting5.getDepth('segmentedDepth\\stereo\\B6Counting')
 # counting5.getCsv('stereo\\joint_xyz\\B6Counting_SK')
@@ -64,7 +64,19 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
-tsdf = random3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+counting1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+counting2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+counting3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+counting4.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+counting5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+counting6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+
+random1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+random2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+random3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+random4.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+random5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+random6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 
 # r = h5py.File('foo.h5', 'r')
 # data = np.array(r['TSDF'])
@@ -72,8 +84,5 @@ tsdf = random3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # TSDFVisualization(data)
 # random3.pointCloudVisualization(900)
 # og = random3.getOccupancyGrid(900, volumeResolutionValue=32, normalize=False)
-#
-#
-
 
 # random3.pointCloudAnimation()

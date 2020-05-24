@@ -709,9 +709,22 @@ class Batch(object):
         return accurateTSDF
 
     def makeAccurateTSDF(self, volumeResolutionValue=32, normalize=False):
-        for instance in tqdm(range(self.batchSize), desc=f'{self._batchName}'):
+        """
+        To make accurate TSDF from all the depth images in the batch at once.
+        :param volumeResolutionValue: MxMxM
+        :param normalize: Whether or not to normalize between 0 and 1.
+        :return:
+        """
+        # Iterate through all the batch.
+        for instance in tqdm(range(self.batchSize), desc=f'TSDF {self._batchName}'):
+            # Find out the accurate TSDF.
             tsdf = self.getAccurateTSDF(instance, volumeResolutionValue=volumeResolutionValue, normalize=normalize)
-            f = h5py.File(f'B3Random\\{instance}.h5', 'w')
+
+            # Create a directory named 'TSDF' in export directory.
+            Path(self._exportDir + 'TSDF').mkdir(parents=True, exist_ok=True)
+
+            # Export the TSDF to a HDF5 file.
+            f = h5py.File(self._exportDir + f'TSDF\\{instance}.h5', 'w')
             f.create_dataset('TSDF', (32, 32, 32), data=tsdf)
             f.close()
 
