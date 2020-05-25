@@ -729,7 +729,6 @@ class Batch(object):
             f.create_dataset('TSDF', (32, 32, 32), data=tsdf)
             f.close()
 
-
     def makeVideo(self, frameRate=60):
         """
         Makes a video file with name of the batch. This is needed for visualization

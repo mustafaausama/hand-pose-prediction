@@ -19,8 +19,11 @@ def jointsVisualization(batch, instance):
         quit()
 
     allJointsOnHand = np.array([batch.data3D[batch.jointNames[joint]][instance] for joint in range(21)])
+
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(allJointsOnHand)
+
+    print(allJointsOnHand)
 
     lines = [
         [0, 1],
@@ -48,7 +51,32 @@ def jointsVisualization(batch, instance):
     allBonesOnHand = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(allJointsOnHand),
                                           lines=o3d.utility.Vector2iVector(lines))
 
-    o3d.visualization.draw_geometries([pcd, allBonesOnHand])
+    axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+
+    # Custom visualization object.
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+
+    # Initialization.
+    vis.add_geometry(pcd)
+    vis.add_geometry(allBonesOnHand)
+    vis.add_geometry(axis)
+
+    # Running.
+    for instance in range(batch.batchSize):
+        allJointsOnHand = np.array([batch.data3D[batch.jointNames[joint]][instance] for joint in range(21)])
+        pcd.points = o3d.utility.Vector3dVector(allJointsOnHand)
+        allBonesOnHand.points = o3d.utility.Vector3dVector(allJointsOnHand)
+        vis.update_geometry(pcd)
+        vis.update_geometry(allBonesOnHand)
+        vis.poll_events()
+        vis.update_renderer()
+
+    # Termination.
+    vis.destroy_window()
+
+    # o3d.visualization.draw_geometries([pcd, allBonesOnHand, o3d.geometry.TriangleMesh.create_coordinate_frame(
+    #     size=0.1, origin=[0, 0, 0])])
 
 
 counting1 = Batch(batchName='B1Counting', commDepth='SK_color_',
@@ -74,7 +102,7 @@ random2.getDepth('segmentedDepth\\stereo\\B2Random')
 counting3 = Batch(batchName='B3Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
 counting3.getDepth('segmentedDepth\\stereo\\B3Counting')
-# counting3.getCsv('stereo\\joint_xyz\\B3Counting_SK')
+counting3.getCsv('stereo\\joint_xyz\\B3Counting_SK')
 
 random3 = Batch(batchName='B3Random', commDepth='SK_color_',
                 startImage='0', endImage='1499')
@@ -111,6 +139,9 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
+
+jointsVisualization(counting3, 0)
+
 # counting1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # counting2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # counting3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
@@ -125,9 +156,6 @@ random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # random6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 
-jointIndex = 13
-imageIndex = 70
-allPointsOnHand = np.array([random3.data3D[random3.jointNames[i]][imageIndex] for i in range(21)])
 # allPointsOnHand[:, 0] = ((allPointsOnHand[:, 0] - np.min(allPointsOnHand[:, 0])) / (np.max(allPointsOnHand[:, 0])
 #                                                                                    - np.min(allPointsOnHand[:, 0]))) * 32
 # allPointsOnHand[:, 1] = ((allPointsOnHand[:, 1] - np.min(allPointsOnHand[:, 1])) / (np.max(allPointsOnHand[:, 1])
@@ -135,7 +163,6 @@ allPointsOnHand = np.array([random3.data3D[random3.jointNames[i]][imageIndex] fo
 # allPointsOnHand[:, 2] = ((allPointsOnHand[:, 2] - np.min(allPointsOnHand[:, 2])) / (np.max(allPointsOnHand[:, 2])
 #                                                                                  - np.min(allPointsOnHand[:, 2]))) * 32
 
-jointsVisualization(random3, 0)
 
 # r = h5py.File('foo.h5', 'r')
 # data = np.array(r['TSDF'])
