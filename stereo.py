@@ -3,6 +3,53 @@ from tools.datamanager import occupancyGridVisualization
 from tools.datamanager import TSDFVisualization
 import h5py
 import numpy as np
+import open3d as o3d
+import logging
+
+
+def jointsVisualization(batch, instance):
+    """
+
+    :param batch:
+    :param instance:
+    :return:
+    """
+    if len(batch.data3D) == 0:
+        logging.error('Import 3D joint data first.\n')
+        quit()
+
+    allJointsOnHand = np.array([batch.data3D[batch.jointNames[joint]][instance] for joint in range(21)])
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(allJointsOnHand)
+
+    lines = [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [0, 5],
+        [5, 6],
+        [6, 7],
+        [7, 8],
+        [0, 9],
+        [9, 10],
+        [10, 11],
+        [11, 12],
+        [0, 13],
+        [13, 14],
+        [14, 15],
+        [15, 16],
+        [0, 17],
+        [17, 18],
+        [18, 19],
+        [19, 20],
+    ]
+
+    allBonesOnHand = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(allJointsOnHand),
+                                          lines=o3d.utility.Vector2iVector(lines))
+
+    o3d.visualization.draw_geometries([pcd, allBonesOnHand])
+
 
 counting1 = Batch(batchName='B1Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
@@ -32,7 +79,7 @@ counting3.getDepth('segmentedDepth\\stereo\\B3Counting')
 random3 = Batch(batchName='B3Random', commDepth='SK_color_',
                 startImage='0', endImage='1499')
 random3.getDepth('segmentedDepth\\stereo\\B3Random')
-# random3.getCsv('stereo\\joint_xyz\\B3Random_SK')
+random3.getCsv('stereo\\joint_xyz\\B3Random_SK')
 
 counting4 = Batch(batchName='B4Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
@@ -56,7 +103,7 @@ random5.getDepth('segmentedDepth\\stereo\\B5Random')
 
 counting6 = Batch(batchName='B6Counting', commDepth='SK_color_',
                   startImage='0', endImage='1499')
-counting5.getDepth('segmentedDepth\\stereo\\B6Counting')
+counting6.getDepth('segmentedDepth\\stereo\\B6Counting')
 # counting5.getCsv('stereo\\joint_xyz\\B6Counting_SK')
 
 random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
@@ -64,19 +111,31 @@ random6 = Batch(batchName='B6Random', commDepth='SK_depth_',
 random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
-counting1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-counting2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-counting3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-counting4.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-counting5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-counting6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# counting1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# counting2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# counting3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# counting4.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# counting5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# counting6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+#
+# random1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# random2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# random3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# random4.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# random5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+# random6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 
-random1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-random2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-random3.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-random4.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-random5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
-random6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
+jointIndex = 13
+imageIndex = 70
+allPointsOnHand = np.array([random3.data3D[random3.jointNames[i]][imageIndex] for i in range(21)])
+# allPointsOnHand[:, 0] = ((allPointsOnHand[:, 0] - np.min(allPointsOnHand[:, 0])) / (np.max(allPointsOnHand[:, 0])
+#                                                                                    - np.min(allPointsOnHand[:, 0]))) * 32
+# allPointsOnHand[:, 1] = ((allPointsOnHand[:, 1] - np.min(allPointsOnHand[:, 1])) / (np.max(allPointsOnHand[:, 1])
+#                                                                                  - np.min(allPointsOnHand[:, 1]))) * 32
+# allPointsOnHand[:, 2] = ((allPointsOnHand[:, 2] - np.min(allPointsOnHand[:, 2])) / (np.max(allPointsOnHand[:, 2])
+#                                                                                  - np.min(allPointsOnHand[:, 2]))) * 32
+
+jointsVisualization(random3, 0)
 
 # r = h5py.File('foo.h5', 'r')
 # data = np.array(r['TSDF'])

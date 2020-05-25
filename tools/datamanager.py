@@ -544,6 +544,7 @@ class Batch(object):
                             Must be between 0 and self.batchSize-1.
         :param normalize:   If true, will normalize the x, y and z between 0
                             and 1.
+        :param volumeResolutionValue: MxMxM matrix. The value of M is volume resolution value.
         :return:
         """
         # Generates the point cloud.
@@ -728,6 +729,7 @@ class Batch(object):
             f.create_dataset('TSDF', (32, 32, 32), data=tsdf)
             f.close()
 
+
     def makeVideo(self, frameRate=60):
         """
         Makes a video file with name of the batch. This is needed for visualization
@@ -806,7 +808,7 @@ class Batch(object):
             kernel = np.ones((3, 3), np.uint8)
             mask = cv2.erode(mask, kernel, iterations=1)
 
-            color = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+            # color = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
             depth = depth[roiStart_depth[0]:roiEnd_depth[0], roiStart_depth[1]:roiEnd_depth[1]]
 
