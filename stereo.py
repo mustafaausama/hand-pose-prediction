@@ -23,7 +23,54 @@ def jointsVisualization(batch, instance):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(allJointsOnHand)
 
-    print(allJointsOnHand)
+    lines = [
+        [0, 1],
+        [1, 2],
+        [2, 3],
+        [3, 4],
+        [0, 5],
+        [5, 6],
+        [6, 7],
+        [7, 8],
+        [0, 9],
+        [9, 10],
+        [10, 11],
+        [11, 12],
+        [0, 13],
+        [13, 14],
+        [14, 15],
+        [15, 16],
+        [0, 17],
+        [17, 18],
+        [18, 19],
+        [19, 20],
+    ]
+
+    allBonesOnHand = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(allJointsOnHand),
+                                          lines=o3d.utility.Vector2iVector(lines))
+
+    o3d.visualization.draw_geometries([pcd, allBonesOnHand, o3d.geometry.TriangleMesh.create_coordinate_frame(
+        size=0.1, origin=[0, 0, 0])])
+
+
+def jointsAnimation(batch):
+    """
+
+    :param batch:
+    :return:
+    """
+    # Custom visualization object.
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+
+    if len(batch.data3D) == 0:
+        logging.error('Import 3D joint data first.\n')
+        quit()
+
+    allJointsOnHand = np.array([batch.data3D[batch.jointNames[joint]][0] for joint in range(21)])
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(allJointsOnHand)
 
     lines = [
         [0, 1],
@@ -51,16 +98,11 @@ def jointsVisualization(batch, instance):
     allBonesOnHand = o3d.geometry.LineSet(points=o3d.utility.Vector3dVector(allJointsOnHand),
                                           lines=o3d.utility.Vector2iVector(lines))
 
-    axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
-
-    # Custom visualization object.
-    vis = o3d.visualization.Visualizer()
-    vis.create_window()
-
     # Initialization.
     vis.add_geometry(pcd)
     vis.add_geometry(allBonesOnHand)
-    vis.add_geometry(axis)
+    vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(
+        size=0.1, origin=[0, 0, 0]))
 
     # Running.
     for instance in range(batch.batchSize):
@@ -74,9 +116,6 @@ def jointsVisualization(batch, instance):
 
     # Termination.
     vis.destroy_window()
-
-    # o3d.visualization.draw_geometries([pcd, allBonesOnHand, o3d.geometry.TriangleMesh.create_coordinate_frame(
-    #     size=0.1, origin=[0, 0, 0])])
 
 
 counting1 = Batch(batchName='B1Counting', commDepth='SK_color_',
@@ -141,6 +180,7 @@ random6.getDepth('segmentedDepth\\stereo\\B6Random')
 
 
 jointsVisualization(counting3, 0)
+jointsAnimation(counting3)
 
 # counting1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # counting2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
