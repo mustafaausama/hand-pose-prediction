@@ -28,17 +28,17 @@ def getActualDepth(depthImage):
     :param depthImage:  The depth image from which data is being extracted.
     :return:            The total depth value.
     """
-    if max(depthImage[:, 0, 0]) == 0 and max(depthImage[:, 0, 1]) < 127:
+    if np.max(depthImage[:, :, 0]) == 0 and np.max(depthImage[:, :, 1]) < 127:
         return depthImage[:, :, 1] * 256 + depthImage[:, :, 2]
-    elif max(depthImage[:, 0, 0]) == 0 and max(depthImage[:, 0, 2]) < 127:
+    elif np.max(depthImage[:, :, 0]) == 0 and np.max(depthImage[:, :, 2]) < 127:
         return depthImage[:, :, 2] * 256 + depthImage[:, :, 1]
-    elif max(depthImage[:, 0, 1]) == 0 and max(depthImage[:, 0, 0]) < 127:
+    elif np.max(depthImage[:, :, 1]) == 0 and np.max(depthImage[:, :, 0]) < 127:
         return depthImage[:, :, 0] * 256 + depthImage[:, :, 2]
-    elif max(depthImage[:, 0, 1]) == 0 and max(depthImage[:, 0, 2]) < 127:
+    elif np.max(depthImage[:, :, 1]) == 0 and np.max(depthImage[:, :, 2]) < 127:
         return depthImage[:, :, 2] * 256 + depthImage[:, :, 0]
-    elif max(depthImage[:, 0, 2]) == 0 and max(depthImage[:, 0, 0]) < 127:
+    elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 0]) < 127:
         return depthImage[:, :, 0] * 256 + depthImage[:, :, 1]
-    elif max(depthImage[:, 0, 2]) == 0 and max(depthImage[:, 0, 1]) < 127:
+    elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 1]) < 127:
         return depthImage[:, :, 1] * 256 + depthImage[:, :, 0]
     else:
         logging.error('Depth value is not 10 bits.\n'
@@ -101,15 +101,15 @@ def getCoordinatesFromDepth(actualDepth, frequencyThreshold=100, normalize=False
     xyz[:, 2] = np.reshape(actualDepth, (1, np.size(actualDepth)))
 
     # Zero is now the minimum value of our data.
-    xyz[:, 0] = xyz[:, 0] - min(xyz[:, 0])
-    xyz[:, 1] = xyz[:, 1] - min(xyz[:, 1])
-    xyz[:, 2] = xyz[:, 2] - min(xyz[:, 2])
+    xyz[:, 0] = xyz[:, 0] - np.min(xyz[:, 0])
+    xyz[:, 1] = xyz[:, 1] - np.min(xyz[:, 1])
+    xyz[:, 2] = xyz[:, 2] - np.min(xyz[:, 2])
 
     # Normalize the data between 0 and 1.
     if normalize:
-        xyz[:, 0] = (xyz[:, 0] - min(xyz[:, 0])) / (max(xyz[:, 0]) - min(xyz[:, 0]))
-        xyz[:, 1] = (xyz[:, 1] - min(xyz[:, 1])) / (max(xyz[:, 1]) - min(xyz[:, 1]))
-        xyz[:, 2] = (xyz[:, 2] - min(xyz[:, 2])) / (max(xyz[:, 2]) - min(xyz[:, 2]))
+        xyz[:, 0] = (xyz[:, 0] - np.min(xyz[:, 0])) / (np.max(xyz[:, 0]) - np.min(xyz[:, 0]))
+        xyz[:, 1] = (xyz[:, 1] - np.min(xyz[:, 1])) / (np.max(xyz[:, 1]) - np.min(xyz[:, 1]))
+        xyz[:, 2] = (xyz[:, 2] - np.min(xyz[:, 2])) / (np.max(xyz[:, 2]) - np.min(xyz[:, 2]))
 
     return xyz
 
@@ -728,6 +728,43 @@ class Batch(object):
             f = h5py.File(self._exportDir + f'TSDF\\{instance}.h5', 'w')
             f.create_dataset('TSDF', (32, 32, 32), data=tsdf)
             f.close()
+
+    def getDirectionalTSDF(self, instance, volumeResolutionValue=32, normalize=False):
+        """
+
+        :param instance:
+        :param volumeResolutionValue:
+        :param normalize:
+        :return:
+        """
+        # Import the depth image and generate points from it.
+        depth = cv2.imread(self.imagesDepth[instance])
+        actualDepth = getActualDepth(depth)
+        xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
+
+        # Create a point cloud and Axis Aligned Bounding Box.
+        pointCloud = o3d.geometry.PointCloud()
+        pointCloud.points = o3d.utility.Vector3dVector(xyz)
+        axisAlignedBoundingBox = pointCloud.get_axis_aligned_bounding_box()
+
+        # Define the voxel size.
+        voxelSize = axisAlignedBoundingBox.get_max_extent() / volumeResolutionValue
+
+        # Define the voxel origin and side lengths.
+        origin = axisAlignedBoundingBox.get_center() - (axisAlignedBoundingBox.get_max_extent()) / 2
+        totalLength = axisAlignedBoundingBox.get_max_extent()
+
+        # Create the voxel.
+        voxelGrid = o3d.geometry.VoxelGrid()
+        voxelGrid = voxelGrid.create_dense(origin, voxelSize, totalLength, totalLength, totalLength)
+
+        # Initialize matrix for occupancy grid.
+        occupancyGrid = np.zeros((volumeResolutionValue, volumeResolutionValue, volumeResolutionValue))
+
+        # Check all points to see which voxel they belong to and set the corresponding
+        # value in occupancy grid. Note that by default it is zero. So everything else
+        # besides the points will be zero.
+        voxelX, voxelY, voxelZ = np.array([]), np.array([]), np.array([])
 
     def makeVideo(self, frameRate=60):
         """

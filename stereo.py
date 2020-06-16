@@ -179,8 +179,8 @@ random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.getCsv('stereo\\joint_xyz\\B6Random_SK')
 
 
-jointsVisualization(counting3, 0)
-jointsAnimation(counting3)
+# jointsVisualization(counting3, 0)
+# jointsAnimation(counting3)
 
 # counting1.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # counting2.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
@@ -196,17 +196,6 @@ jointsAnimation(counting3)
 # random5.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 # random6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 
-# allPointsOnHand[:, 0] = ((allPointsOnHand[:, 0] - np.min(allPointsOnHand[:, 0])) / (np.max(allPointsOnHand[:, 0])
-#                                                                                    - np.min(allPointsOnHand[:, 0]))) * 32
-# allPointsOnHand[:, 1] = ((allPointsOnHand[:, 1] - np.min(allPointsOnHand[:, 1])) / (np.max(allPointsOnHand[:, 1])
-#                                                                                  - np.min(allPointsOnHand[:, 1]))) * 32
-# allPointsOnHand[:, 2] = ((allPointsOnHand[:, 2] - np.min(allPointsOnHand[:, 2])) / (np.max(allPointsOnHand[:, 2])
-#                                                                                  - np.min(allPointsOnHand[:, 2]))) * 32
-
-
-# r = h5py.File('foo.h5', 'r')
-# data = np.array(r['TSDF'])
-# r.close()
 # TSDFVisualization(data)
 # random3.pointCloudVisualization(900)
 # og = random3.getOccupancyGrid(900, volumeResolutionValue=32, normalize=False)
