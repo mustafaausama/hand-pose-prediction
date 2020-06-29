@@ -197,7 +197,7 @@ random6.getDepth('segmentedDepth\\stereo\\B6Random')
 # random6.makeAccurateTSDF(volumeResolutionValue=32, normalize=False)
 
 # TSDFVisualization(data)
-# random3.pointCloudVisualization(900)
+random3.pointCloudVisualization(80)
 # og = random3.getOccupancyGrid(900, volumeResolutionValue=32, normalize=False)
 
 # random3.pointCloudAnimation()

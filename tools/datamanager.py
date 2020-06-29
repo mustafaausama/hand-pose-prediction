@@ -4,18 +4,19 @@ which can be used to import and manipulate data. An example of this is given in
 data.py.
 """
 
-import logging
-from pathlib import Path
-import cv2
 import numpy as np
 import open3d as o3d
-from tqdm import tqdm
-import sys
-from matplotlib import pyplot as plt
 import seaborn as sns
+import cv2
+import logging
+import sys
+import os
 import itertools
 import colorsys
 import h5py
+from tqdm import tqdm
+from pathlib import Path
+from matplotlib import pyplot as plt
 
 np.set_printoptions(threshold=sys.maxsize)
 
@@ -41,12 +42,11 @@ def getActualDepth(depthImage):
     elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 1]) < 127:
         return depthImage[:, :, 1] * 256 + depthImage[:, :, 0]
     else:
-        logging.error('Depth value is not 10 bits.\n'
-                      'Not Supported.\n')
+        logging.error('Depth value is not 10 bits so it is not supported.')
         quit()
 
 
-def getCoordinatesFromDepth(actualDepth, frequencyThreshold=100, normalize=False):
+def getCoordinatesFromDepth(actualDepth, frequencyThreshold=400, normalize=False):
     """
     To generate xyz matrix from depth data to be displayed in point cloud map.
     :param normalize: Whether or not to normalize the data between 0 and 1.
@@ -116,7 +116,7 @@ def getCoordinatesFromDepth(actualDepth, frequencyThreshold=100, normalize=False
 
 def plotHistogram(xyz):
     """
-    Plots the histogram of the given three dimensional matirx. This is very
+    Plots the histogram of the given three dimensional matrix. This is very
     important to get right because it visualizes the distribution of our most
     frequent values in our point cloud points.
     :param xyz:     A three dimensional matrix.
@@ -216,7 +216,7 @@ def TSDFVisualization(tsdf):
     nonOneValues = (nonOneValues - min(nonOneValues)) / (max(nonOneValues) - min(nonOneValues))
     colors = []
     for nonOneValue in nonOneValues:
-        ii = colorsys.hsv_to_rgb(nonOneValue, 0.65, 1)
+        ii = colorsys.hsv_to_rgb(nonOneValue, 1, 1)
         colors.append([ii[0], ii[1], ii[2]])
 
     # PCD is colored on the basis of signed distance and not on the basis of depth.
@@ -268,7 +268,9 @@ class Batch(object):
                             number 50 to 100 we will set this value to '0000050'.
         :param endImage:    The index of last image that will be imported in
                             this data set. For above given example it will be a string
-                            '0000100'.
+                            '0000100'. If startImage and endImage are not provided then
+                            program will attempt to load all images from the directory
+                            given in method self._get(directory).
 
         :return:            self
         """
@@ -305,12 +307,18 @@ class Batch(object):
         # Private method which generates the strings for
         # both rgb and depth images.
         # Should never be called by user.
-        for imRange in np.arange(int(self._startImage), int(self._endImage) + 1):
-            leading_zeros = '%0' + str(len(self._startImage)) + 'd'
-            image_index = leading_zeros % imRange
-            images.append(self._dataDir + dataDir + '\\'
-                          + commString + image_index
-                          + '.png')
+        if self._startImage is not None and self._endImage is not None:
+            for imRange in np.arange(int(self._startImage), int(self._endImage) + 1):
+                leading_zeros = '%0' + str(len(self._startImage)) + 'd'
+                image_index = leading_zeros % imRange
+                images.append(self._dataDir + dataDir + '\\'
+                              + commString + image_index
+                              + '.png')
+        else:
+            logging.warning(f'All images imported inside directory.\n{self._dataDir + dataDir}')
+            logging.warning('commRgb and commDepth parameters ignored.')
+            for fileName in os.listdir(self._dataDir + dataDir):
+                images.append(self._dataDir + dataDir + '\\' + fileName)
 
     def getRgb(self, dataDir):
         """
