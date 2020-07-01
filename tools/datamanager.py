@@ -21,31 +21,6 @@ from matplotlib import pyplot as plt
 np.set_printoptions(threshold=sys.maxsize)
 
 
-def getActualDepth(depthImage):
-    """
-    Depth of an image is typically larger than 8 bits, so it cannot be
-    stored in an 8 bit image. For this reason most data sets have their
-    depth stored in different color channels of the image.
-    :param depthImage:  The depth image from which data is being extracted.
-    :return:            The total depth value.
-    """
-    if np.max(depthImage[:, :, 0]) == 0 and np.max(depthImage[:, :, 1]) < 127:
-        return depthImage[:, :, 1] * 256 + depthImage[:, :, 2]
-    elif np.max(depthImage[:, :, 0]) == 0 and np.max(depthImage[:, :, 2]) < 127:
-        return depthImage[:, :, 2] * 256 + depthImage[:, :, 1]
-    elif np.max(depthImage[:, :, 1]) == 0 and np.max(depthImage[:, :, 0]) < 127:
-        return depthImage[:, :, 0] * 256 + depthImage[:, :, 2]
-    elif np.max(depthImage[:, :, 1]) == 0 and np.max(depthImage[:, :, 2]) < 127:
-        return depthImage[:, :, 2] * 256 + depthImage[:, :, 0]
-    elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 0]) < 127:
-        return depthImage[:, :, 0] * 256 + depthImage[:, :, 1]
-    elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 1]) < 127:
-        return depthImage[:, :, 1] * 256 + depthImage[:, :, 0]
-    else:
-        logging.error('Depth value is not 10 bits so it is not supported.')
-        quit()
-
-
 def getCoordinatesFromDepth(actualDepth, frequencyThreshold=400, normalize=False):
     """
     To generate xyz matrix from depth data to be displayed in point cloud map.
@@ -303,6 +278,40 @@ class Batch(object):
         # Creates a directory with name of batch.
         Path(self._exportDir).mkdir(parents=True, exist_ok=True)
 
+    def _checkDepthChannel(self):
+        """
+        This method is private and checks which color channel of depth images contain
+        the depth data. This method also detects that which color channel is high depth
+        and which color channel is low depth.
+        :return: self._depthHighChannel, self._depthLowChannel
+        """
+        if self._depth:
+            depthImage = cv2.imread(self.imagesDepth[0])
+            if np.max(depthImage[:, :, 0]) == 0 and np.max(depthImage[:, :, 1]) < 127:
+                self._depthHighChannel = 1
+                self._depthLowChannel = 2
+            elif np.max(depthImage[:, :, 0]) == 0 and np.max(depthImage[:, :, 2]) < 127:
+                self._depthHighChannel = 2
+                self._depthLowChannel = 1
+            elif np.max(depthImage[:, :, 1]) == 0 and np.max(depthImage[:, :, 0]) < 127:
+                self._depthHighChannel = 0
+                self._depthLowChannel = 2
+            elif np.max(depthImage[:, :, 1]) == 0 and np.max(depthImage[:, :, 2]) < 127:
+                self._depthHighChannel = 2
+                self._depthLowChannel = 0
+            elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 0]) < 127:
+                self._depthHighChannel = 0
+                self._depthLowChannel = 1
+            elif np.max(depthImage[:, :, 2]) == 0 and np.max(depthImage[:, :, 1]) < 127:
+                self._depthHighChannel = 1
+                self._depthLowChannel = 0
+            else:
+                logging.error('Depth value is not 10 bits so it is not supported.')
+                quit()
+        else:
+            self._depthHighChannel = None
+            self._depthLowChannel = None
+
     def _get(self, dataDir, images, commString):
         # Private method which generates the strings for
         # both rgb and depth images.
@@ -373,6 +382,7 @@ class Batch(object):
             self.getDepth(dataDir)
             logging.warning('Batch already populated.\n'
                             'Data replaced.')
+        self._checkDepthChannel()
 
     def getCsv(self, csvDir):
         """
@@ -532,7 +542,7 @@ class Batch(object):
         # depth = cv2.medianBlur(depth, 5)
 
         # Merging the two channel depth data into one variable.
-        actualDepth = getActualDepth(depth)
+        actualDepth = self.getActualDepth(depth)
         xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Generates the actual Point Cloud.
@@ -540,6 +550,16 @@ class Batch(object):
         pointCloud.points = o3d.utility.Vector3dVector(xyz)
 
         return pointCloud
+
+    def getActualDepth(self, depthImage):
+        """
+        Depth of an image is typically larger than 8 bits, so it cannot be
+        stored in an 8 bit image. For this reason most data sets have their
+        depth stored in different color channels of the image.
+        :param depthImage:  The depth image from which data is being extracted.
+        :return:            The total depth value.
+        """
+        return depthImage[:, :, self._depthHighChannel] * 256 + depthImage[:, :, self._depthLowChannel]
 
     def pointCloudVisualization(self, instance, normalize=False, volumeResolutionValue=32):
         """
@@ -594,7 +614,7 @@ class Batch(object):
         # Running.
         for instance in range(self.batchSize):
             depth = cv2.imread(self.imagesDepth[instance])
-            actualDepth = getActualDepth(depth)
+            actualDepth = self.getActualDepth(depth)
             xyz = getCoordinatesFromDepth(actualDepth)
             pcd.points = o3d.utility.Vector3dVector(xyz)
             vis.update_geometry(pcd)
@@ -616,7 +636,7 @@ class Batch(object):
         """
         # Import the depth image and generate points from it.
         depth = cv2.imread(self.imagesDepth[instance])
-        actualDepth = getActualDepth(depth)
+        actualDepth = self.getActualDepth(depth)
         xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Create a point cloud and Axis Aligned Bounding Box.
@@ -664,7 +684,7 @@ class Batch(object):
         """
         # Import the depth image.
         depth = cv2.imread(self.imagesDepth[instance])
-        actualDepth = getActualDepth(depth)
+        actualDepth = self.getActualDepth(depth)
         xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Point cloud creation.
@@ -747,7 +767,7 @@ class Batch(object):
         """
         # Import the depth image and generate points from it.
         depth = cv2.imread(self.imagesDepth[instance])
-        actualDepth = getActualDepth(depth)
+        actualDepth = self.getActualDepth(depth)
         xyz = getCoordinatesFromDepth(actualDepth, normalize=normalize)
 
         # Create a point cloud and Axis Aligned Bounding Box.
