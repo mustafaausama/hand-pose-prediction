@@ -1,0 +1,2 @@
+C:\Users\aliar\OneDrive\Desktop\kinect\DepthBasics-D2D\Debug\DepthBasics-D2D.exe
+C:\Users\aliar\OneDrive\Desktop\kinect\DepthBasics-D2D\Debug\DepthBasics-D2D.pdb
