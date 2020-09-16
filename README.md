@@ -1,6 +1,7 @@
 # hand-pose-prediction
 This repository is for research purpose and to bring optimizations in the 3d-hand pose estimations techniques that have already been implemnted by 
 Researchers.
+
 STRATEGY.
 
 Depth Images from kinect model will be obtained.
