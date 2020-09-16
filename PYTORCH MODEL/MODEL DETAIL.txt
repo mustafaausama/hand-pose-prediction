@@ -1,0 +1,13 @@
+THIS IS THE DEEP PLAIN NETWORK IMPLEMEMNTED BY A RESEARCH GROUP :
+THE REFRENCE TO THE PAPER IS AS FOLLOWS:
+
+Real-time 3D Hand Pose Estimation
+with 3D Convolutional Neural Networks
+Liuhao Ge, Hui Liang, Member, IEEE, Junsong Yuan, Senior Member, IEEE, and Daniel Thalmann
+n. Citation information: DOI 10.1109/TPAMI.2018.2827052, IEEE
+Transactions on Pattern Analysis and Machine Intelligence
+
+# WE HOPE TO BRING OPTIMIZATIONS IN THIS MODEL
+VARIOUS TRAINING HAVE BEEN PERFORMED AND FINAL OPTIMIZED MODELS WILL BE SHARED
+
+# TRAINING LOSS IS ALSO MENTINED IN .DOCX FILES
