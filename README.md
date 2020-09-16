@@ -23,7 +23,7 @@ A. Haque, B. Peng, Z. Luo, A. Alahi, S. Yeung, and F.-F. Li, “Towards
 viewpoint invariant 3D human pose estimation,” in Proc. Eur. Conf.
 Comput. Vis., 2016, pp. 160–177
 
-The strategies in these papers are implemented to implemented .
+The strategies in these papers are to be implemented  .
 
 ABSTRACT:
 
