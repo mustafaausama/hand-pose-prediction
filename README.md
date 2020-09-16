@@ -1,11 +1,12 @@
 # hand-pose-prediction
 This repository is for research purpose and to bring optimizations in the 3d-hand pose estimations techniques that have already been implemnted by 
 Researchers.
-STRATEGY:
+STRATEGY.
 Depth Images from kinect model will be obtained.
-depth image will be transformed into volumetric representation at a very low latency by cuda programming and using multiple cuda cores in GPU.
+Depth image will be transformed into volumetric representation at a very low latency by cuda programming and using multiple cuda cores in GPU.
 Neural Network with 3D convolutions will be used to exploit and perfrom regression on the Hand joints.
 Various Supervied and Unsupervied Methods will be used and optimizations will be made in the precedding research:
+
 Refrences:
 
 Real-time 3D Hand Pose Estimation
@@ -16,7 +17,7 @@ A. Haque, B. Peng, Z. Luo, A. Alahi, S. Yeung, and F.-F. Li, “Towards
 viewpoint invariant 3D human pose estimation,” in Proc. Eur. Conf.
 Comput. Vis., 2016, pp. 160–177
 
-The strategies in these papers are implemented to implement real time hand pose estimation.
+The strategies in these papers are implemented to implemented .
 
 ABSTRACT:
 
