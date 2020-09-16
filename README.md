@@ -2,10 +2,15 @@
 This repository is for research purpose and to bring optimizations in the 3d-hand pose estimations techniques that have already been implemnted by 
 Researchers.
 STRATEGY.
+
 Depth Images from kinect model will be obtained.
+
 Depth image will be transformed into volumetric representation at a very low latency by cuda programming and using multiple cuda cores in GPU.
+
 Neural Network with 3D convolutions will be used to exploit and perfrom regression on the Hand joints.
+
 Various Supervied and Unsupervied Methods will be used and optimizations will be made in the precedding research:
+
 
 Refrences:
 
