@@ -1,4 +1,4 @@
-# hand-pose-prediction
+# Hand-Pose-Prediction
 This repository is for research purpose and to bring optimizations in the 3d-hand pose estimations techniques that have already been implemnted by 
 Researchers.
 
