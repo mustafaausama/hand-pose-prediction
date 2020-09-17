@@ -1,0 +1,9 @@
+THE INPUT TO THE MODELS :
+LOWER 30 VECTOR SPACE FEATURES:
+https://drive.google.com/file/d/1l2TDTO6_DESdH3G8u9BnZYIdoWOW0Tm5/view?usp=sharing
+
+
+THE OUTPUT OF THE MODELS:
+3D HAND POINTS 42 POINTS :
+https://drive.google.com/file/d/1DkEJQ85tE-R1S8q79GzBDPdW-QUNOrH_/view?usp=sharing
+

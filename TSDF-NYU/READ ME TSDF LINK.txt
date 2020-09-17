@@ -1,0 +1,6 @@
+THE TSDF FOR NYU DATASET ARE AVALIABLE AT :
+https://drive.google.com/file/d/1ADz1bH7IZKaVAqv_DgaOaxX7oxaVrnfM/view?usp=sharing
+
+THE GROUND TRUTH FOR LOWER DIMENSIONAL OF 30 FOR TRAINING TSDF IS AT:
+https://drive.google.com/file/d/1l2TDTO6_DESdH3G8u9BnZYIdoWOW0Tm5/view?usp=sharing
+
